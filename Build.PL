@@ -1,0 +1,17 @@
+use strict;
+use warnings;
+use Module::Build;
+
+my $builder = Module::Build->new(
+    module_name         => 'Test::Aggregate',
+    license             => 'perl',
+    dist_author         => 'Curtis Poe <ovid@cpan.org>',
+    dist_version_from   => 'lib/Test/Aggregate.pm',
+    build_requires => {
+        'Test::More' => 0,
+    },
+    add_to_cleanup      => [ 'Test-Aggregate-*' ],
+    create_makefile_pl => 'traditional',
+);
+
+$builder->create_build_script();

@@ -1,0 +1,21 @@
+---
+name: Test-Aggregate
+version: 0.01
+author:
+  - 'Curtis Poe <ovid@cpan.org>'
+abstract: Aggregate C<*.t> tests to make them run faster.
+license: perl
+resources:
+  license: http://dev.perl.org/licenses/
+build_requires:
+  Test::More: 0
+provides:
+  Test::Aggregate:
+    file: lib/Test/Aggregate.pm
+    version: 0.01
+  Test::Builder:
+    file: lib/Test/Aggregate.pm
+generated_by: Module::Build version 0.2808
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.2.html
+  version: 1.2

@@ -1,0 +1,14 @@
+Build.PL
+Changes
+MANIFEST
+META.yml # Will be created by "make dist"
+README
+lib/Test/Aggregate.pm
+t/aggregate.t
+t/lib/Slow/Loading/Module.pm
+aggtests/boilerplate.t
+aggtests/pod-coverage.t
+aggtests/pod.t
+aggtests/00-load.t
+aggtests/slow_load.t
+Makefile.PL

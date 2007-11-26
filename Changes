@@ -1,5 +1,13 @@
 Revision history for Test-Aggregate
 
-0.01    
+0.02    26/11/2007
+        - Fixed bug where multiple tests setting an explicit plan in the use
+          statement would cause failures.
+        - Attempt to work around 'unauthorized release' issue on the CPAN.
+          Simply declaring the 'Test::Builder' package directly is frowned
+          upon.
+        - Update the docs to warn explain 'shared variable' warnings.
+
+0.01    25/11/2007
         First version.  Run test suites faster.
 

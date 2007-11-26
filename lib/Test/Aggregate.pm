@@ -19,11 +19,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
@@ -106,11 +106,10 @@ $test_code
 $separator end of $test $separator
         END_CODE
     }
-
-    $code .= <<'    END_CODE';
+    $code .= <<"    END_CODE";
     END {
-        no warnings 'redefine';
-        *Test::Builder::no_header = sub { 0 }; 
+        my \$builder = Test::More->builder;
+        \$builder->expected_tests(\$builder->current_test);
     }
     END_CODE
 
@@ -130,6 +129,8 @@ $separator end of $test $separator
         ok 1, "******** running tests for $test ********";
         $package->run_the_tests;
     }
+    my $tests = Test::More->builder->current_test;
+    Test::More->builder->_print("1..$tests\n");
 }
 
 sub _slurp {
@@ -148,9 +149,8 @@ sub _test_builder_override {
  return <<'END_CODE';
 {
     no warnings 'redefine';
-    package Test::Builder;
 
-    sub plan {
+    sub Test::Builder::plan {
         my ( $self, $cmd, $arg ) = @_;
 
         return unless $cmd;
@@ -182,7 +182,7 @@ sub _test_builder_override {
 
         return 1;
     }
-    sub no_header { 1 }
+    sub Test::Builder::no_header { 1 }
 }
 END_CODE
 }
@@ -216,6 +216,28 @@ C<Test::Builder> implements "deferred plans", we can get a bit more safety.
 See
 L<http://groups.google.com/group/perl.qa/browse_thread/thread/d58c49db734844f4/cd18996391acc601?#cd18996391acc601>
 for more information.
+
+=item * C<Variable "$x" will not stay shared at (eval ...>
+
+Because each test is wrapped in a method call, any of your subs which access a
+variable in an outer scope will likely throw the above warning.  Pass in
+arguments explicitly to suppress this.
+
+Instead of:
+
+ my $x = 17;
+ sub foo {
+     my $y = shift;
+     return $y + $x;
+ }
+
+Write this:
+
+ my $x = 17;
+ sub foo {
+     my ( $y, $x ) = @_;
+     return $y + $x;
+ }
 
 =back
 

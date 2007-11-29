@@ -19,11 +19,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 =head1 SYNOPSIS
 
@@ -93,6 +93,10 @@ sub runtests {
         my $test_code = $class->_slurp($test);
         if ( $test_code =~ /^(__(?:DATA|END)__)/m ) {
             croak("Test $test not allowed to have $1 token");
+        }
+        if ( $test_code =~ /skip_all/m ) {
+            warn
+              "Found possible 'skip_all'.  This can cause test suites to abort";
         }
         my $package   = $class->_get_package($test);
         push @packages => [ $test, $package ];
@@ -217,6 +221,12 @@ See
 L<http://groups.google.com/group/perl.qa/browse_thread/thread/d58c49db734844f4/cd18996391acc601?#cd18996391acc601>
 for more information.
 
+=item * No 'skip_all' tests, please
+
+Tests which potentially 'skip_all' will cause the aggregate test suite to
+abort prematurely.  Do not attempt to aggregate them.  This may be fixed in a
+future release.
+
 =item * C<Variable "$x" will not stay shared at (eval ...>
 
 Because each test is wrapped in a method call, any of your subs which access a
@@ -244,6 +254,11 @@ Write this:
 =head1 AUTHOR
 
 Curtis Poe, C<< <ovid at cpan.org> >>
+
+=head1 ACKNOWLEDGEMENTS
+
+Many thanks to mauzo (L<http://use.perl.org/~mauzo/> for helping me find the
+'skip_all' bug.
 
 =head1 BUGS
 

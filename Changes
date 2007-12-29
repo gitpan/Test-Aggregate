@@ -1,5 +1,9 @@
 Revision history for Test-Aggregate
 
+0.05    29/12/2007
+        - Fixed an open in aggtests/boilerplate.t which made the module fail
+          with 5.005.
+
 0.04    29/12/2007
         - Fixed open() to work with versions of Perl < 5.6
         - More extensive overriding of Test::Builder internals.  I tried to

@@ -5,7 +5,7 @@ use Module::Build;
 my $builder = Module::Build->new(
     module_name         => 'Test::Aggregate',
     license             => 'perl',
-    dist_author         => 'Curtis Poe <ovid@cpan.org>',
+    dist_author         => 'Curtis "Ovid" Poe <ovid@cpan.org>',
     dist_version_from   => 'lib/Test/Aggregate.pm',
     build_requires => {
         'Test::More' => 0,

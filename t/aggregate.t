@@ -6,5 +6,12 @@ use warnings;
 use lib 'lib', 't/lib';
 use Test::Aggregate;
 
-$Test::Aggregate::DUMP = 'dump.t';
-Test::Aggregate->runtests('aggtests/');
+my $tests = Test::Aggregate->new(
+    {
+        dump          => 'dump.t',
+        shuffle       => 1,
+        dirs          => 'aggtests',
+        set_filenames => 1,
+    }
+);
+$tests->run;

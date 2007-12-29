@@ -4,7 +4,7 @@ use warnings;
 use strict;
 
 use Test::Builder::Module;
-use vars qw(@ISA @EXPORT $DUMP);
+use vars qw(@ISA @EXPORT $VERSION);
 @ISA = qw(Test::Builder::Module);
 use Test::More;
 use Carp 'croak';
@@ -19,17 +19,20 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =cut
 
-our $VERSION = '0.03';
+$VERSION = '0.04';
 
 =head1 SYNOPSIS
 
     use Test::Aggregate;
 
-    Test::Aggregate->runtests($dir);
+    my $tests = Test::Aggregate->new( {
+        dirs => $aggregate_test_dir,
+    } );
+    $tests->run;
 
 =head1 DESCRIPTION
 
@@ -39,9 +42,9 @@ stable.
 A common problem with many test suites is that they can take a long time to
 run.  The longer they run, the less likely you are to run the tests.  This
 module borrows a trick from C<Apache::Registry> to load up your tests at once,
-create a separate package for each test and wraps the code in a method named
-C<run_the_tests>.  This allows us to load perl only once and related modules
-only once.  If you have modules which are expensive to load, this can
+create a separate package for each test and wraps each package in a method
+named C<run_the_tests>.  This allows us to load perl only once and related
+modules only once.  If you have modules which are expensive to load, this can
 dramatically speed up a test suite.
 
 =head1 USAGE
@@ -52,7 +55,10 @@ your regular test directory (C<t/> is the standard):
 
  use Test::Aggregate;
  my $other_test_dir = 'aggregate_tests';
- Test::Aggregate->runtests($other_test_dir);
+ my $tests = Test::Aggregate->new( {
+    dirs => $other_test_dir
+ });
+ $tests->run;
 
 Take your simplest tests and move them, one by one, into the new test
 directory and keep running the C<Test::Aggregate> program.  You'll find some
@@ -62,66 +68,181 @@ distribution's tests are organized for an example.
 
 =head1 METHODS
 
-=head2 C<runtests>
+=head2 C<new>
  
- my $test_dir = 'aggtests/';
- Test::Aggregate->runtests($test_dir);
+ my $tests = Test::Aggregate->new(
+     {
+         dirs          => 'aggtests',
+         dump          => 'dump.t',     # optional
+         shuffle       => 1,            # optional
+         matching      => qr/customer/, # optional
+         set_filenames => 1,            # optional
+     }
+ );
  
-Attempts to aggregate all test programs in a given directory and run them at
-the same time.
+Creates a new C<Test::Aggregate> instance.  Accepts a hashref with the
+following keys:
 
-If C<$Test::Aggregate::DUMP> is set, will attempt to use the value as a
-filename and print the code to it.
+=over 4
+
+=item * C<dirs> (mandatory)
+
+The directories to look in for the aggregated tests.  This may be a scalar
+value of a single directory or an array refernce of multiple directories.
+
+=item * C<dump> (optional)
+
+You may list the name of a file to dump the aggregated tests to.  This is
+useful if you have test failures and need to debug why the tests failed.
+
+=item * C<shuffle> (optional)
+
+Ordinarily, the tests are sorted by name and run in that order. This allows
+you to run them in any order.
+
+=item * C<matching> (optional)
+
+If supplied with a regular expression (requires the C<qr> operator), will only
+run tests whose filename matches the regular expression.
+
+=item * C<set_filenames> (optional)
+
+If supplied with a true value, this will cause the following to be added for
+each test:
+
+  local $0 = $test_filename;
+
+Tests which depend on the value of $0 can often be made to work with this.
+
+=back
+
+=head2 C<run>
+
+ $tests->run;
+
+Attempts to aggregate and run all tests listed in the directories specified in
+the constructor.
 
 =cut
 
-sub runtests {
-    my ( $class, $dir ) = @_;
+sub new {
+    my ( $class, $arg_for ) = @_;
+
+    unless ( exists $arg_for->{dirs} ) {
+        Test::More::BAIL_OUT("You must supply 'dirs'");
+    }
+        
+    my $dirs = $arg_for->{dirs};
+    $dirs = [$dirs] if 'ARRAY' ne ref $dirs;
+
+    my $matching = qr//;
+    if ( $arg_for->{matching} ) {
+        $matching = delete $arg_for->{matching};
+        unless ( 'Regexp' eq ref $matching ) {
+            $class->_croak("Argument for 'matching' must be a pre-compiled regex");
+        }
+    }
+
+    my $self = bless {
+        dump          => $arg_for->{dump},
+        shuffle       => $arg_for->{shuffle},
+        dirs          => $dirs,
+        matching      => $matching,
+        set_filenames => $arg_for->{set_filenames},
+    } => $class;
+}
+
+sub _dump           { shift->{dump} }
+sub _should_shuffle { shift->{shuffle} }
+sub _matching       { shift->{matching} }
+sub _set_filenames  { shift->{set_filenames} }
+sub _dirs           { @{ shift->{dirs} } }
+
+sub _get_tests {
+    my $self = shift;
     my @tests;
+    my $matching = $self->_matching;
     find( {
             no_chdir => 1,
             wanted   => sub {
-                push @tests => $File::Find::name if /\.t\z/;
+                push @tests => $File::Find::name if /\.t\z/ && /$matching/;
             }
-    }, $dir);
+    }, $self->_dirs );
+    
+    if ( $self->_should_shuffle ) {
+        $self->_shuffle(@tests);
+    }
+    else {
+        @tests = sort @tests;
+    }
+    return @tests;
+}
 
-    my $code = $class->_test_builder_override;
+sub _shuffle {
+    my $self = shift;
+
+    # Fisher-Yates shuffle
+    my $i = @_;
+    while ($i) {
+        my $j = rand $i--;
+        @_[ $i, $j ] = @_[ $j, $i ];
+    }
+    return;
+}
+
+sub run {
+    my $self  = shift;
+    my @tests = $self->_get_tests;
+
+    my $code = $self->_test_builder_override;
 
     my @packages;
     my $separator = '#' x 20;
+    
+    my $test_packages = '';
+
+    my $dump = $self->_dump;
+
+    $code .= "\nif ( __FILE__ eq '$dump' ) {\n";
     foreach my $test (@tests) {
-        my $test_code = $class->_slurp($test);
+        my $test_code = $self->_slurp($test);
         if ( $test_code =~ /^(__(?:DATA|END)__)/m ) {
-            croak("Test $test not allowed to have $1 token");
+            Test::More::BAIL_OUT("Test $test not allowed to have $1 token");
         }
         if ( $test_code =~ /skip_all/m ) {
             warn
               "Found possible 'skip_all'.  This can cause test suites to abort";
         }
-        my $package   = $class->_get_package($test);
+        my $package   = $self->_get_package($test);
         push @packages => [ $test, $package ];
         $code .= <<"        END_CODE";
+    Test::More::ok(1, "******** running tests for $test ********");
+    $package->run_the_tests;
+        END_CODE
+
+        my $set_filenames = $self->_set_filenames
+            ? "local \$0 = '$test';"
+            : '';
+        $test_packages .= <<"        END_CODE";
+{
 $separator beginning of $test $separator
 package $package;
-
 sub run_the_tests {
+$set_filenames
 $test_code
 }
 $separator end of $test $separator
+}
         END_CODE
     }
-    $code .= <<"    END_CODE";
-    END {
-        my \$builder = Test::More->builder;
-        \$builder->expected_tests(\$builder->current_test);
-    }
-    END_CODE
 
-    if ( defined $DUMP ) {
-        open my $fh, '>', $DUMP
-          or die "Could not open ($DUMP) for writing: $!";
-        print $fh $code;
-        close $fh;
+    $code .= "}\n$test_packages";
+
+    if ( $dump ne '' ) {
+        local *FH;
+        open FH, "> $dump" or die "Could not open ($dump) for writing: $!";
+        print FH $code;
+        close FH;
     }
     eval $code;
     if ( my $error = $@ ) {
@@ -130,17 +251,16 @@ $separator end of $test $separator
 
     foreach my $data (@packages) {
         my ( $test, $package ) = @$data;
-        ok 1, "******** running tests for $test ********";
+        Test::More::ok(1, "******** running tests for $test ********");
         $package->run_the_tests;
     }
-    my $tests = Test::More->builder->current_test;
-    Test::More->builder->_print("1..$tests\n");
 }
 
 sub _slurp {
     my ( $class, $file ) = @_;
-    open my $fh, '<', $file or die "Cannot read ($file): $!";
-    return do { local $/; <$fh> };
+    local *FH;
+    open FH, "< $file" or die "Cannot read ($file): $!";
+    return do { local $/; <FH> };
 }
 
 sub _get_package {
@@ -150,9 +270,27 @@ sub _get_package {
 }
 
 sub _test_builder_override {
- return <<'END_CODE';
+    return <<'END_CODE';
 {
+    use Test::Builder;
+    use Test::Builder::Module;
+
     no warnings 'redefine';
+
+    sub Test::Builder::DESTROY {
+        my $builder = shift;
+        my $tests   = $builder->current_test;
+        $builder->_print("1..$tests\n");
+    }
+
+    sub Test::Builder::_plan_check {
+        my $self = shift;
+
+        # Will this break under threads?
+        $self->{Expected_Tests} = $self->{Curr_Test} + 1;
+    }
+
+    sub Test::Builder::no_header { 1 }
 
     sub Test::Builder::plan {
         my ( $self, $cmd, $arg ) = @_;
@@ -160,6 +298,11 @@ sub _test_builder_override {
         return unless $cmd;
 
         local $Test::Builder::Level = $Test::Builder::Level + 1;
+
+        # XXX need to disable the plan check
+        #if( $self->{Have_Plan} ) {
+        #    $self->croak("You tried to plan twice");
+        #}
 
         if ( $cmd eq 'no_plan' ) {
             $self->no_plan;
@@ -186,7 +329,6 @@ sub _test_builder_override {
 
         return 1;
     }
-    sub Test::Builder::no_header { 1 }
 }
 END_CODE
 }
@@ -249,16 +391,122 @@ Write this:
      return $y + $x;
  }
 
+=item * Singletons
+
+Be very careful of code which loads singletons.  Oftimes those singletons in
+test suites may be altered for testing purposes, but later attempts to use
+those singletons can fail dramatically as they're not expecting the
+alterations.  (Your author has painfully learned this lesson with database
+connections).
+
 =back
+
+=head1 DEBUGGING AGGREGATE TESTS
+
+Before aggregating tests, make sure that you add tests B<one at a time> to the
+aggregated test directory.  Attempting to add many tests to the directory at
+once and then experiencing a failure means it will be much harder to track
+down which tests caused the failure.
+
+Debugging aggregated tests which fail is a multi-step process.  Let's say the
+following fails:
+
+ my $tests = Test::Aggregate->new(
+     {
+         dump    => 'dump.t',
+         shuffle => 1,
+         dirs    => 'aggtests',
+     }
+ );
+ $tests->run;
+
+=head2 Manually run the tests
+
+The first step is to manually run all of the tests in the C<aggtests> dir.
+
+ prove -r aggtests/
+
+If the failures appear the same, fix them just like you would fix any other
+test failure and then rerun the C<Test::Aggregate> code.
+
+Sometimes this means that a different number of tests run from what the
+aggregted tests run.  Look for code which ends the program prematurely, such
+as an exception or an C<exit> statement.
+
+=head2 Run a dump file
+
+If this does not fix your problem, create a dump file by passing 
+C<< dump => $dumpfile >> to the constructor (as in the above example).  Then
+try running this dumpfile directly to attempt to replicate the error:
+
+ prove -r $dumpfile
+
+=head2 Tweaking the dump file
+
+Assuming the error has been replicated, open up the dump file.  The beginning
+of the dump file will have some code which overrides some C<Test::Builder>
+internals.  After that, you'll see the code which runs the tests.  It will
+look similar to this:
+
+ if ( __FILE__ eq 'dump.t' ) {
+     Test::More::ok(1, "******** running tests for aggtests/boilerplate.t ********");
+     aggtestsboilerplatet->run_the_tests;
+     Test::More::ok(1, "******** running tests for aggtests/subs.t ********");
+     aggtestssubst->run_the_tests;
+     Test::More::ok(1, "******** running tests for aggtests/00-load.t ********");
+     aggtests00loadt->run_the_tests;
+     Test::More::ok(1, "******** running tests for aggtests/slow_load.t ********");
+     aggtestsslow_loadt->run_the_tests;
+ }
+
+You can try to narrow down the problem by commenting out all of the
+C<run_the_tests> lines and gradually reintroducing them until you can figure
+out which one is actually causing the failure.
+
+=head1 COMMON PITFALLS
+
+=head2 C<BEGIN>, C<CHECK>, C<INIT> and C<END> blocks
+
+Remember that since the tests are now being run at once, these blocks will no
+longer run on a per-test basis, but will run for the entire aggregated set of
+tests.  You may need to examine these individually to determine the problem.
+
+=head2 C<Test::NoWarnings>
+
+This is a great test module.  When aggregating tests together, however, it can
+cause pain as you'll often discover warnings that you never new existed.  For
+a quick fix, add this before you attempt to run your tests:
+
+ $INC{'Test/NoWarnings.pm'} = 1;
+
+That will disable C<Test::NoWarnings>, but you'll want to go in later to fix
+them.
+
+=head2 Paths
+
+Many tests make assumptions about the paths to files and moving them into a
+new test directory can break this.
+
+=head2 C<$0>
+
+Tests which use C<$0> can be problematic as the code is run in an C<eval>
+through C<Test::Aggregate> and C<$0> may not match expectations.  This also
+means that it can behave differently if run directly from a dump file.
+
+As it turns out, you can assign to C<$0>!  If C<< set_filenames => 1 >> is
+passed to the constructor, every test will have the following added to its
+package:
+
+ local $0 = $test_file_name;
+
+=head2 Minimal test case
+
+If you cannot solve the problem, feel free to try and create a minimal test
+case and send it to me (assuming it's something I can run).
 
 =head1 AUTHOR
 
 Curtis Poe, C<< <ovid at cpan.org> >>
-
-=head1 ACKNOWLEDGEMENTS
-
-Many thanks to mauzo (L<http://use.perl.org/~mauzo/> for helping me find the
-'skip_all' bug.
 
 =head1 BUGS
 
@@ -298,13 +546,18 @@ L<http://search.cpan.org/dist/Test-Aggregate>
 
 =head1 ACKNOWLEDGEMENTS
 
+Many thanks to mauzo (L<http://use.perl.org/~mauzo/> for helping me find the
+'skip_all' bug.
+
+Thanks to Johan Lindström for pointing me to Apache::Registry.
+
 =head1 COPYRIGHT & LICENSE
 
-Copyright 2007 Curtis Poe, all rights reserved.
+Copyright 2007 Curtis "Ovid" Poe, all rights reserved.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
 =cut
 
-1; # End of Test::Aggregate
+1;

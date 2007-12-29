@@ -1,5 +1,19 @@
 Revision history for Test-Aggregate
 
+0.04    29/12/2007
+        - Fixed open() to work with versions of Perl < 5.6
+        - More extensive overriding of Test::Builder internals.  I tried to
+          subclass it but it's not designed to be subclassed and much pain
+          ensued.
+        - Dump file now has all "run_the_tests" lines at the top and the
+          packages below them.  This makes for easier debugging as you can
+          comment out test packages one by one simply by commenting out its
+          "run_the_tests" line.
+        - Fixed bug where runtests() would run tests in a different order from
+          the dump file.
+        - Fixed bug where Test::NoWarnings would try to run a test after the
+          plan was output.
+
 0.03    29/11/2007
         - Moved 'skip_all' files into the t/ directory. Aggregating them
           fails.  mauzo (http://use.perl.org/~mauzo/)

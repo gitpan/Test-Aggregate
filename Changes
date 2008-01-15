@@ -1,5 +1,9 @@
 Revision history for Test-Aggregate
 
+0,06    15/01/2007
+        - Use an END block instead of adding Test::Builder::DESTROY.  This is
+          cleaner and doesn't override the DESTROY provided by Test::Most.
+
 0.05    29/12/2007
         - Fixed an open in aggtests/boilerplate.t which made the module fail
           with 5.005.

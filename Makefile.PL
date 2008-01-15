@@ -2,13 +2,13 @@
 use ExtUtils::MakeMaker;
 WriteMakefile
 (
+          'PL_FILES' => {},
+          'INSTALLDIRS' => 'site',
           'NAME' => 'Test::Aggregate',
+          'EXE_FILES' => [],
           'VERSION_FROM' => 'lib/Test/Aggregate.pm',
           'PREREQ_PM' => {
-                           'Test::More' => '0'
-                         },
-          'INSTALLDIRS' => 'site',
-          'EXE_FILES' => [],
-          'PL_FILES' => {}
+                           'Test::More' => 0
+                         }
         )
 ;

@@ -19,11 +19,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.05
+Version 0.06
 
 =cut
 
-$VERSION = '0.05';
+$VERSION = '0.06';
 
 =head1 SYNOPSIS
 
@@ -277,8 +277,10 @@ sub _test_builder_override {
 
     no warnings 'redefine';
 
-    sub Test::Builder::DESTROY {
-        my $builder = shift;
+    END {
+
+        # This works because it's a singleton
+        my $builder = Test::Builder->new;
         my $tests   = $builder->current_test;
         $builder->_print("1..$tests\n");
     }

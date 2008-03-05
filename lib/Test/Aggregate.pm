@@ -19,11 +19,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.06
+Version 0.07
 
 =cut
 
-$VERSION = '0.06';
+$VERSION = '0.07';
 
 =head1 SYNOPSIS
 
@@ -65,6 +65,17 @@ directory and keep running the C<Test::Aggregate> program.  You'll find some
 tests will not run in a shared environment like this.  You can either fix the
 tests or simply leave them in your regular test directory.  See how this
 distribution's tests are organized for an example.
+
+Some tests cannot run in an aggregate environment.  These may include
+singletons or code which has deliberate global side-effects.  If so, you can
+test for this with the C<< $ENV{TEST_AGGREGATE} >> variable:
+
+ package Some::Package;
+
+ BEGIN {
+     die __PACKAGE__ ." cannot run in aggregated tests"
+       if $ENV{TEST_AGGREGATE};
+ }
 
 =head1 METHODS
 
@@ -206,6 +217,10 @@ sub run {
     $code .= "\nif ( __FILE__ eq '$dump' ) {\n";
     foreach my $test (@tests) {
         my $test_code = $self->_slurp($test);
+
+        # Strip __END__ and __DATA__ if there's nothing after it.
+        # XXX leaving this out for now as I'm unsure if it's worth it.
+        #$test_code =~ s/\n__(?:DATA|END)__\n$//s;
         if ( $test_code =~ /^(__(?:DATA|END)__)/m ) {
             Test::More::BAIL_OUT("Test $test not allowed to have $1 token");
         }
@@ -272,6 +287,11 @@ sub _get_package {
 sub _test_builder_override {
     return <<'END_CODE';
 {
+    $ENV{TEST_AGGREGATE} = 1;
+
+    END {   # for VMS
+        delete $ENV{TEST_AGGREGATE};
+    }
     use Test::Builder;
     use Test::Builder::Module;
 

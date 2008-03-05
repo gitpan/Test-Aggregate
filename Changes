@@ -1,6 +1,9 @@
 Revision history for Test-Aggregate
 
-0,06    15/01/2007
+0.07    05/03/2008
+        - Added TEST_AGGREGATE environment variable.
+
+0.06    15/01/2007
         - Use an END block instead of adding Test::Builder::DESTROY.  This is
           cleaner and doesn't override the DESTROY provided by Test::Most.
 

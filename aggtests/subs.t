@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 use lib 'lib', 't/lib';
-use Test::More tests => 1;
+use Test::More tests => 2;
 use Slow::Loading::Module;
 
 {
@@ -14,3 +14,10 @@ use Slow::Loading::Module;
 }
 
 is whee(), 'whee!', 'subs work!';
+
+SKIP: {
+    skip 'Test::Aggregate not loaded', 1
+      unless exists $INC{'Test/Aggregate.pm'};
+    ok $ENV{TEST_AGGREGATE},
+      '... and the TEST_AGGREGATE environment variable should be set';
+}

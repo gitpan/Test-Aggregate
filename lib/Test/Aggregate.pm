@@ -19,11 +19,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.07
+Version 0.08
 
 =cut
 
-$VERSION = '0.07';
+$VERSION = '0.08';
 
 =head1 SYNOPSIS
 
@@ -84,6 +84,7 @@ test for this with the C<< $ENV{TEST_AGGREGATE} >> variable:
  my $tests = Test::Aggregate->new(
      {
          dirs          => 'aggtests',
+         verbose       => 1,            # optional, but recommended
          dump          => 'dump.t',     # optional
          shuffle       => 1,            # optional
          matching      => qr/customer/, # optional
@@ -100,6 +101,22 @@ following keys:
 
 The directories to look in for the aggregated tests.  This may be a scalar
 value of a single directory or an array refernce of multiple directories.
+
+=item * C<verbose> (optional, but strongly recommended)
+
+If set with a true value, each test programs success or failure will be
+indicated with a diagnostic output.  The output below means that
+C<aggtests/slow_load.t> was an aggregated test which failed.  This means it's
+much easier to determine which aggregated tests are causing problems.
+
+ t/aggregate.........2/? 
+ #     ok - aggtests/boilerplate.t
+ #     ok - aggtests/00-load.t
+ # not ok - aggtests/subs.t
+ #     ok - aggtests/slow_load.t
+ t/aggregate.........ok
+ t/pod-coverage......ok
+ t/pod...............ok
 
 =item * C<dump> (optional)
 
@@ -157,17 +174,19 @@ sub new {
     my $self = bless {
         dump          => $arg_for->{dump},
         shuffle       => $arg_for->{shuffle},
+        verbose       => $arg_for->{verbose},
         dirs          => $dirs,
         matching      => $matching,
         set_filenames => $arg_for->{set_filenames},
     } => $class;
 }
 
-sub _dump           { shift->{dump} }
+sub _dump           { shift->{dump} || '' }
 sub _should_shuffle { shift->{shuffle} }
 sub _matching       { shift->{matching} }
 sub _set_filenames  { shift->{set_filenames} }
 sub _dirs           { @{ shift->{dirs} } }
+sub _verbose        { shift->{verbose} }
 
 sub _get_tests {
     my $self = shift;
@@ -207,6 +226,10 @@ sub run {
 
     my $code = $self->_test_builder_override;
 
+    $code .= <<'    END_CODE';
+my $LAST_TEST_NUM = 0;
+    END_CODE
+
     my @packages;
     my $separator = '#' x 20;
     
@@ -230,6 +253,8 @@ sub run {
         }
         my $package   = $self->_get_package($test);
         push @packages => [ $test, $package ];
+        $code .= <<"        END_CODE" if $self->_verbose;
+        END_CODE
         $code .= <<"        END_CODE";
     Test::More::ok(1, "******** running tests for $test ********");
     $package->run_the_tests;
@@ -245,6 +270,21 @@ package $package;
 sub run_the_tests {
 $set_filenames
 $test_code
+{
+    my \$builder = Test::Builder->new;   # singleton
+    my \$tests   = \$builder->current_test;
+    my \$failed = 0;
+    my \@summary = \$builder->summary;
+    foreach my \$passed ( \@summary[\$LAST_TEST_NUM .. \$tests - 1] ) {
+        if ( not \$passed ) {
+            \$failed = 1;
+            last;
+        }
+    }
+    my \$ok = \$failed ? "not ok - $test" : "    ok - $test";
+    Test::More::diag( \$ok);
+    \$LAST_TEST_NUM = \$tests;
+}
 }
 $separator end of $test $separator
 }

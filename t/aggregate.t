@@ -8,6 +8,7 @@ use Test::Aggregate;
 
 my $tests = Test::Aggregate->new(
     {
+        verbose       => 1,
         dump          => 'dump.t',
         shuffle       => 1,
         dirs          => 'aggtests',

@@ -8,7 +8,7 @@ my $builder = Module::Build->new(
     dist_author         => 'Curtis "Ovid" Poe <ovid@cpan.org>',
     dist_version_from   => 'lib/Test/Aggregate.pm',
     build_requires => {
-        'Test::More' => 0,
+        'Test::Simple' => 0.74,  # we fail on the common 0.62
     },
     add_to_cleanup      => [ 'Test-Aggregate-*' ],
     create_makefile_pl => 'traditional',

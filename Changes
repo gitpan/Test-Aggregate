@@ -1,5 +1,12 @@
 Revision history for Test-Aggregate
 
+0.08    09/04/2008
+        - Require Test::Builder 0.74.
+        - We now diag ok/not ok messages for each test program.  This makes it
+          much easier to figure out which program failed.
+        - Fixed warnings when 'dump' was not set.  Thanks to RENEEB for the
+          bug report [http://rt.cpan.org/Ticket/Display.html?id=32443]
+
 0.07    05/03/2008
         - Added TEST_AGGREGATE environment variable.
 

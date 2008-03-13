@@ -10,6 +10,9 @@ my $builder = Module::Build->new(
     build_requires => {
         'Test::Simple' => 0.74,  # we fail on the common 0.62
     },
+    recommends => {
+        'Data::Dump::Streamer' => 1.11,
+    },
     add_to_cleanup      => [ 'Test-Aggregate-*' ],
     create_makefile_pl => 'traditional',
 );

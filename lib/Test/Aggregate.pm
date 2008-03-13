@@ -1,4 +1,4 @@
-package Test::Aggregate;
+;package Test::Aggregate;
 
 use warnings;
 use strict;
@@ -19,11 +19,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.08
+Version 0.10
 
 =cut
 
-$VERSION = '0.08';
+$VERSION = '0.10';
 
 =head1 SYNOPSIS
 
@@ -153,6 +153,15 @@ the constructor.
 
 =cut
 
+sub _code_attributes {
+    qw/
+        setup
+        teardown
+        startup
+        shutdown
+    /;
+}
+
 sub new {
     my ( $class, $arg_for ) = @_;
 
@@ -171,14 +180,49 @@ sub new {
         }
     }
 
+    my $has_code_attributes;
+    foreach my $attribute ( $class->_code_attributes ) {
+        if ( my $ref = $arg_for->{$attribute} ) {
+            if ( 'CODE' ne ref $ref ) {
+                $class->_croak(
+                    "Attribute ($attribute) must be a code reference");
+            }
+            else {
+                $has_code_attributes++;
+            }
+        }
+    }
+
     my $self = bless {
-        dump          => $arg_for->{dump},
-        shuffle       => $arg_for->{shuffle},
-        verbose       => $arg_for->{verbose},
-        dirs          => $dirs,
-        matching      => $matching,
-        set_filenames => $arg_for->{set_filenames},
+        dirs         => $dirs,
+        matching     => $matching,
+        _no_streamer => 0,
+        _packages    => [],
     } => $class;
+    $self->{$_} = $arg_for->{$_} foreach (
+        qw/
+        dump
+        set_filenames
+        shuffle
+        verbose
+        /,
+        $class->_code_attributes
+    );
+    if ( $has_code_attributes ) {
+        eval "use Data::Dump::Streamer";
+        if ( $@ && $self->_dump ) {
+            my $error = $@;
+            my $dump  = $self->_dump;
+            warn <<"            END_WARNING";
+Dump file ($dump) cannot be generated.  A code attributes was requested but
+we cannot load Data::Dump::Streamer:  $error.
+            END_WARNING
+            $self->{dump}         = '';
+            $self->{_no_streamer} = 1;
+        }
+    }
+
+    return $self;
 }
 
 sub _dump           { shift->{dump} || '' }
@@ -186,7 +230,13 @@ sub _should_shuffle { shift->{shuffle} }
 sub _matching       { shift->{matching} }
 sub _set_filenames  { shift->{set_filenames} }
 sub _dirs           { @{ shift->{dirs} } }
+sub _packages       { @{ shift->{_packages} } }
 sub _verbose        { shift->{verbose} }
+sub _startup        { shift->{startup} }
+sub _shutdown       { shift->{shutdown} }
+sub _setup          { shift->{setup} }
+sub _teardown       { shift->{teardown} }
+sub _no_streamer    { shift->{_no_streamer} }
 
 sub _get_tests {
     my $self = shift;
@@ -222,12 +272,47 @@ sub _shuffle {
 
 sub run {
     my $self  = shift;
-    my @tests = $self->_get_tests;
 
+    my $code = $self->_build_aggregate_code;
+
+    my $dump = $self->_dump;
+    if ( $dump ne '' ) {
+        local *FH;
+        open FH, "> $dump" or die "Could not open ($dump) for writing: $!";
+        print FH $code;
+        close FH;
+    }
+    eval $code;
+    if ( my $error = $@ ) {
+        croak("Could not run tests: $@");
+    }
+
+    $self->_startup->() if $self->_startup;
+    foreach my $data ($self->_packages) {
+        my ( $test, $package ) = @$data;
+        Test::More::ok(1, "******** running tests for $test ********");
+        $self->_setup->() if $self->_setup;
+        $package->run_the_tests;
+        $self->_teardown->() if $self->_teardown;
+    }
+    $self->_shutdown->() if $self->_shutdown;
+}
+
+sub _build_aggregate_code {
+    my $self = shift;
     my $code = $self->_test_builder_override;
 
-    $code .= <<'    END_CODE';
-my $LAST_TEST_NUM = 0;
+    my ( $startup,  $startup_code )  = $self->_as_code('startup');
+    my ( $shutdown, $shutdown_code ) = $self->_as_code('shutdown');
+    my ( $setup,    $setup_code )    = $self->_as_code('setup');
+    my ( $teardown, $teardown_code ) = $self->_as_code('teardown');
+
+    $code .= <<"    END_CODE";
+$startup_code
+$shutdown_code
+$setup_code
+$teardown_code
+my \$LAST_TEST_NUM = 0;
     END_CODE
 
     my @packages;
@@ -238,7 +323,10 @@ my $LAST_TEST_NUM = 0;
     my $dump = $self->_dump;
 
     $code .= "\nif ( __FILE__ eq '$dump' ) {\n";
-    foreach my $test (@tests) {
+    if ( $startup ) {
+        $code .= "    $startup->();\n";
+    }
+    foreach my $test ($self->_get_tests) {
         my $test_code = $self->_slurp($test);
 
         # Strip __END__ and __DATA__ if there's nothing after it.
@@ -252,13 +340,18 @@ my $LAST_TEST_NUM = 0;
               "Found possible 'skip_all'.  This can cause test suites to abort";
         }
         my $package   = $self->_get_package($test);
-        push @packages => [ $test, $package ];
-        $code .= <<"        END_CODE" if $self->_verbose;
-        END_CODE
+        push @{ $self->{_packages} } => [ $test, $package ];
+        if ( $setup ) {
+            $code .= "    $setup->('$test');\n";
+        }
         $code .= <<"        END_CODE";
     Test::More::ok(1, "******** running tests for $test ********");
     $package->run_the_tests;
         END_CODE
+        if ( $teardown ) {
+            $code .= "    $teardown->('$test');\n";
+        }
+        $code .= "\n";
 
         my $set_filenames = $self->_set_filenames
             ? "local \$0 = '$test';"
@@ -290,25 +383,27 @@ $separator end of $test $separator
 }
         END_CODE
     }
+    if ( $shutdown ) {
+        $code .= "    $shutdown->();\n";
+    }
 
     $code .= "}\n$test_packages";
+}
 
-    if ( $dump ne '' ) {
-        local *FH;
-        open FH, "> $dump" or die "Could not open ($dump) for writing: $!";
-        print FH $code;
-        close FH;
-    }
-    eval $code;
-    if ( my $error = $@ ) {
-        croak("Could not run tests: $@");
-    }
-
-    foreach my $data (@packages) {
-        my ( $test, $package ) = @$data;
-        Test::More::ok(1, "******** running tests for $test ********");
-        $package->run_the_tests;
-    }
+sub _as_code {
+    my ( $self, $name ) = @_;
+    my $method   = "_$name";
+    return ( '', '' ) if $self->_no_streamer;
+    my $code     = $self->$method || return ( '', '' );
+    $code = Data::Dump::Streamer::Dump($code)->Indent(0)->Out;
+    my $sub_name = "\$TEST_AGGREGATE_\U$name";
+    $code =~ s/\$CODE1/$sub_name/;
+    return ( $sub_name, <<"    END_CODE" );
+my $sub_name;
+{
+$code
+}
+    END_CODE
 }
 
 sub _slurp {
@@ -395,6 +490,83 @@ sub _test_builder_override {
 END_CODE
 }
 
+=head1 SETUP/TEARDOWN
+
+Since C<BEGIN> and C<END> blocks are for the entire aggregated tests and not
+for each test program (see C<CAVEATS>), you might find that you need to have
+setup/teardown functions for tests.  These are useful if you need to setup
+connections to test databases, clear out temp files, or any of a variety of
+tasks that your test suite might require.  Here's a somewhat useless example,
+pulled from our tests:
+
+ #!/usr/bin/perl
+ 
+ use strict;
+ use warnings;
+ 
+ use lib 'lib', 't/lib';
+ use Test::Aggregate;
+ use Test::More;
+ 
+ my $dump = 'dump.t';
+ 
+ my ( $startup, $shutdown ) = ( 0, 0 );
+ my ( $setup, $teardown ) = ( 0, 0 );
+ my $tests = Test::Aggregate->new(
+     {
+         dirs     => 'aggtests',
+         dump     => $dump,
+         startup  => sub { $startup++ },
+         shutdown => sub { $shutdown++ },
+         setup    => sub { $setup++ },
+         teardown => sub { $teardown++ },
+     }
+ );
+ $tests->run;
+ is $startup,  1, 'Startup should be called once';
+ is $shutdown, 1, '... as should shutdown';
+ is $setup,    4, 'Setup should be called once for each test program';
+ is $teardown, 4, '... as should teardown';
+
+Note that you can still dump these to a dump file.  This will only work if
+C<Data::Dump::Streamer> 1.11 or later is installed.
+
+There are four attributes which can be passed to the constructor, each of
+which expects a code reference:
+
+=over 4
+
+=item * C<startup>
+
+ startup => \&connect_to_database,
+
+This function will be called before any of the tests are run (but after
+C<BEGIN> blocks, I'm afraid).
+
+=item * C<shutdown>
+
+ shutdown => \&clean_up_temp_files,
+
+This function will be called after all of the tests are run.
+
+=item * C<setup>
+
+ setup => sub { 
+    # this gets run before each test program.
+ },
+
+The setup function will be run before every test program.
+
+=item * C<teardown>
+
+ teardown => sub {
+    # this gets run after every test program.
+ }
+
+The teardown function gets run after every test program.
+
+=back
+
 =head1 CAVEATS
 
 Not all tests can be included with this technique.  If you have C<Test::Class>
@@ -409,7 +581,8 @@ These won't work and the tests will call BAIL_OUT() if these tokens are seen.
 =item * C<BEGIN> and C<END> blocks.
 
 Since all of the tests are aggregated together, C<BEGIN> and C<END> blocks
-will be for the scope of the entire set of aggregated tests.
+will be for the scope of the entire set of aggregated tests.  If you need
+setup/teardown facilities, see L<SETUP/TEARDOWN>.
 
 =item * Syntax errors
 

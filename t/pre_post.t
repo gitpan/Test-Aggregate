@@ -9,6 +9,15 @@ use Test::More;
 
 my ( $startup, $shutdown ) = ( 3, 0 );
 my ( $setup,   $teardown ) = ( 3, 0 );
+
+$SIG{__WARN__} = sub {
+    my $warning = shift;
+    if ( $warning =~ m{Can't locate Data/Dump/Streamer\.pm in \@INC} ) {  #'
+        return;
+    }
+    CORE::warn($warning);
+};
+
 my $tests = Test::Aggregate->new(
     {
         dirs     => 'aggtests',
@@ -16,6 +25,7 @@ my $tests = Test::Aggregate->new(
         shutdown => sub { $shutdown++ },
         setup    => sub { $setup++ },
         teardown => sub { $teardown++ },
+        dump => 'dump.t',
     }
 );
 $tests->run;

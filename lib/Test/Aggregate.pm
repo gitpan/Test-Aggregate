@@ -1,4 +1,4 @@
-;package Test::Aggregate;
+package Test::Aggregate;
 
 use warnings;
 use strict;
@@ -19,11 +19,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.10
+Version 0.11
 
 =cut
 
-$VERSION = '0.10';
+$VERSION = '0.11';
 
 =head1 SYNOPSIS
 
@@ -89,6 +89,7 @@ test for this with the C<< $ENV{TEST_AGGREGATE} >> variable:
          shuffle       => 1,            # optional
          matching      => qr/customer/, # optional
          set_filenames => 1,            # optional
+         tidy          => 1,            # optional
      }
  );
  
@@ -142,6 +143,16 @@ each test:
 
 Tests which depend on the value of $0 can often be made to work with this.
 
+=item * C<tidy>
+
+If supplied a true value, attempts to run C<Perl::Tidy> on the source code.
+This is a no-op if C<Perl::Tidy> cannot be loaded.  This option is
+C<experimental>.  Plus, if your tests are terribly convoluted, this could be
+slow and possibly buggy.
+
+If the value of this argument is the name of a file, assumes that this file is
+a C<.perltidyrc> file.
+
 =back
 
 =head2 C<run>
@@ -169,7 +180,7 @@ sub new {
         Test::More::BAIL_OUT("You must supply 'dirs'");
     }
         
-    my $dirs = $arg_for->{dirs};
+    my $dirs = delete $arg_for->{dirs};
     $dirs = [$dirs] if 'ARRAY' ne ref $dirs;
 
     my $matching = qr//;
@@ -199,44 +210,53 @@ sub new {
         _no_streamer => 0,
         _packages    => [],
     } => $class;
-    $self->{$_} = $arg_for->{$_} foreach (
+    $self->{$_} = delete $arg_for->{$_} foreach (
         qw/
         dump
         set_filenames
         shuffle
         verbose
+        tidy
         /,
         $class->_code_attributes
     );
-    if ( $has_code_attributes ) {
+    if ( my @keys = keys %$arg_for ) {
+        local $" = ', ';
+        $class->_croak("Unknown keys to &new:  (@keys)");
+    }
+    if ($has_code_attributes) {
         eval "use Data::Dump::Streamer";
-        if ( $@ && $self->_dump ) {
-            my $error = $@;
-            my $dump  = $self->_dump;
-            warn <<"            END_WARNING";
+        if ( my $error = $@ ) {
+            $self->{_no_streamer} = 1;
+            if ( my $dump = $self->_dump ) {
+                warn <<"                END_WARNING";
 Dump file ($dump) cannot be generated.  A code attributes was requested but
 we cannot load Data::Dump::Streamer:  $error.
-            END_WARNING
-            $self->{dump}         = '';
-            $self->{_no_streamer} = 1;
+                END_WARNING
+                $self->{dump} = '';
+            }
         }
     }
 
     return $self;
 }
 
+# set form user data
 sub _dump           { shift->{dump} || '' }
 sub _should_shuffle { shift->{shuffle} }
 sub _matching       { shift->{matching} }
 sub _set_filenames  { shift->{set_filenames} }
 sub _dirs           { @{ shift->{dirs} } }
-sub _packages       { @{ shift->{_packages} } }
-sub _verbose        { shift->{verbose} }
+sub _verbose        { shift->{verbose} ? 1 : 0 }
 sub _startup        { shift->{startup} }
 sub _shutdown       { shift->{shutdown} }
 sub _setup          { shift->{setup} }
 sub _teardown       { shift->{teardown} }
+sub _tidy           { shift->{tidy} }
+
+# set from internal data
 sub _no_streamer    { shift->{_no_streamer} }
+sub _packages       { @{ shift->{_packages} } }
 
 sub _get_tests {
     my $self = shift;
@@ -306,6 +326,7 @@ sub _build_aggregate_code {
     my ( $shutdown, $shutdown_code ) = $self->_as_code('shutdown');
     my ( $setup,    $setup_code )    = $self->_as_code('setup');
     my ( $teardown, $teardown_code ) = $self->_as_code('teardown');
+    my $verbose = $self->_verbose;
 
     $code .= <<"    END_CODE";
 $startup_code
@@ -329,6 +350,9 @@ my \$LAST_TEST_NUM = 0;
     foreach my $test ($self->_get_tests) {
         my $test_code = $self->_slurp($test);
 
+        # get rid of hashbangs as Perl::Tidy all huffy-like and we disregard
+        # them anyway.
+        $test_code =~ s/\A#![^\n]+//gm;
         # Strip __END__ and __DATA__ if there's nothing after it.
         # XXX leaving this out for now as I'm unsure if it's worth it.
         #$test_code =~ s/\n__(?:DATA|END)__\n$//s;
@@ -375,7 +399,7 @@ $test_code
         }
     }
     my \$ok = \$failed ? "not ok - $test" : "    ok - $test";
-    Test::More::diag( \$ok);
+    Test::More::diag(\$ok) if $verbose;
     \$LAST_TEST_NUM = \$tests;
 }
 }
@@ -388,6 +412,27 @@ $separator end of $test $separator
     }
 
     $code .= "}\n$test_packages";
+    if ( my $tidy = $self->_tidy ) {
+        eval "use Perl::Tidy";
+        my $error = $@;
+        my $dump = $self->_dump;
+        if ( $error && $dump ) {
+            warn "Cannot tidy dumped code:  $error";
+        } 
+        elsif ( !$error ) {
+            my @output;
+            my @tidyrc = -f $tidy
+                ? ( perltidyrc => $tidy )
+                : ();
+            Perl::Tidy::perltidy(
+                source      => \$code,
+                destination => \@output,
+                @tidyrc,
+            );
+            $code = join '' => @output;
+        }
+    }
+    return $code;
 }
 
 sub _as_code {
@@ -511,7 +556,7 @@ pulled from our tests:
  my $dump = 'dump.t';
  
  my ( $startup, $shutdown ) = ( 0, 0 );
- my ( $setup, $teardown ) = ( 0, 0 );
+ my ( $setup,   $teardown ) = ( 0, 0 );
  my $tests = Test::Aggregate->new(
      {
          dirs     => 'aggtests',

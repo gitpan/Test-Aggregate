@@ -12,6 +12,7 @@ my $builder = Module::Build->new(
     },
     recommends => {
         'Data::Dump::Streamer' => 1.11,
+        'Perl::Tidy'           => 20060614,
     },
     add_to_cleanup      => [ 'Test-Aggregate-*' ],
     create_makefile_pl => 'traditional',

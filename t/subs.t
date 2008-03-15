@@ -9,7 +9,6 @@ use Test::More;
 
 my $tests = Test::Aggregate->new(
     {
-        verbose  => 1,
         dirs     => 'aggtests',
         matching => qr/subs/,
     }

@@ -1,5 +1,9 @@
 Revision history for Test-Aggregate
 
+0.21    11/06/2008
+        - Wrap ->run_the_tests() calls in an eval so that one package failing
+          is less likely to stop the other tests from running.
+
 0.20    04/04/2008
         - 'startup' and 'shutdown' are no longer called in BEGIN/END blocks.
           They were getting rather tricky due to timing issues.  This may

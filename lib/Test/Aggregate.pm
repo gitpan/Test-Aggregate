@@ -26,11 +26,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.20
+Version 0.21
 
 =cut
 
-$VERSION = '0.20';
+$VERSION = '0.21';
 
 =head1 SYNOPSIS
 
@@ -221,7 +221,7 @@ sub new {
         Test::More::BAIL_OUT("You must supply 'dirs'");
     }
         
-    $arg_for->{test_nowarnings} ||= 1;
+    $arg_for->{test_nowarnings} = 1 unless exists $arg_for->{test_nowarnings};
     my $dirs = delete $arg_for->{dirs};
     $dirs = [$dirs] if 'ARRAY' ne ref $dirs;
 
@@ -365,7 +365,8 @@ sub run {
         Test::More::diag("******** running tests for $test ********")
           if $ENV{TEST_VERBOSE};
         $self->_setup->() if $self->_setup;
-        $package->run_the_tests;
+        eval { $package->run_the_tests };
+        warn "Error running ($test):  $@" if $@;
         $self->_teardown->() if $self->_teardown;
     }
     $self->_shutdown->() if $self->_shutdown;
@@ -426,7 +427,8 @@ my \$LAST_TEST_NUM = 0;
         }
         $code .= <<"        END_CODE";
     Test::More::diag("******** running tests for $test ********") if \$ENV{TEST_VERBOSE};
-    $package->run_the_tests;
+    eval { $package->run_the_tests };
+    warn "Error running ($test): \$\@" if \$\@;
         END_CODE
         if ( $teardown ) {
             $code .= "    $teardown->('$test');\n";
@@ -531,6 +533,7 @@ sub _test_builder_override {
 
     my $check_plan              = $self->_check_plan;
 
+$DB::single = 1;
     my $disable_test_nowarnings = '';
     if ( !$self->_test_nowarnings ) {
         $disable_test_nowarnings = <<'        END_CODE';

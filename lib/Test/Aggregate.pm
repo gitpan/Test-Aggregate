@@ -26,11 +26,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.21
+Version 0.22
 
 =cut
 
-$VERSION = '0.21';
+$VERSION = '0.22';
 
 =head1 SYNOPSIS
 
@@ -366,7 +366,9 @@ sub run {
           if $ENV{TEST_VERBOSE};
         $self->_setup->() if $self->_setup;
         eval { $package->run_the_tests };
-        warn "Error running ($test):  $@" if $@;
+        if ( my $error = $@ ) {
+            Test::More::ok( 0, "Error running ($test):  $error" );
+        }
         $self->_teardown->() if $self->_teardown;
     }
     $self->_shutdown->() if $self->_shutdown;
@@ -533,7 +535,6 @@ sub _test_builder_override {
 
     my $check_plan              = $self->_check_plan;
 
-$DB::single = 1;
     my $disable_test_nowarnings = '';
     if ( !$self->_test_nowarnings ) {
         $disable_test_nowarnings = <<'        END_CODE';

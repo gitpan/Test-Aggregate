@@ -11,7 +11,8 @@ my $builder = Module::Build->new(
         'Test::Simple' => 0.74,  # we fail on the common 0.62
     },
     requires => {
-        'Test::Harness' => 3.09,
+        'Test::Harness'    => 3.09,
+        'Test::NoWarnings' => 0,
     },
     recommends => {
         'Data::Dump::Streamer' => 1.11,

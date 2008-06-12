@@ -11,5 +11,6 @@ WriteMakefile(
         'Perl::Tidy'               => '20060614',
         'Test::Harness'            => '3.09',
         'Test::Simple'             => '0.74',
+        'Test::NoWarnings'         => 0,
     },
 );

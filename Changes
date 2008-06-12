@@ -1,5 +1,9 @@
 Revision history for Test-Aggregate
 
+0.23    12/06/08
+        - Reluctantly added Test::NoWarnings as a dependency to avoid test
+          failures.
+
 0.22    11/06/2008
         - If we really do have an error from the eval listed below, make sure
           we have a failing test to accompany it.  Otherwise, tests which die

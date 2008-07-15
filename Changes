@@ -1,5 +1,12 @@
 Revision history for Test-Aggregate
 
+0.24    15/07/2008
+        - Document the 'local $@' problem in "COMMON PITFALLS".
+        - Ensure that dump file also forces a failure outside the eval().
+        - Make sure that the TEST_AGGREGATE environment variable is set in a
+          BEGIN block.  Otherwise, code relying on this variable might get
+          called too soon to check it.
+
 0.23    12/06/08
         - Reluctantly added Test::NoWarnings as a dependency to avoid test
           failures.

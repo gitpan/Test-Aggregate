@@ -13,6 +13,12 @@ use vars qw(@ISA @EXPORT $VERSION);
 @ISA    = qw(Test::Builder::Module);
 @EXPORT = @Test::More::EXPORT;
 
+BEGIN { $ENV{TEST_AGGREGATE} = 1 };
+
+END {   # for VMS
+    delete $ENV{TEST_AGGREGATE};
+}
+
 # controls whether or not we show individual test program pass/fail
 my %VERBOSE = (
     none     => 0,
@@ -26,11 +32,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.23
+Version 0.24
 
 =cut
 
-$VERSION = '0.23';
+$VERSION = '0.24';
 
 =head1 SYNOPSIS
 
@@ -430,7 +436,9 @@ my \$LAST_TEST_NUM = 0;
         $code .= <<"        END_CODE";
     Test::More::diag("******** running tests for $test ********") if \$ENV{TEST_VERBOSE};
     eval { $package->run_the_tests };
-    warn "Error running ($test): \$\@" if \$\@;
+    if ( my \$error = \$@ ) {
+        Test::More::ok( 0, "Error running ($test):  \$error" );
+    }
         END_CODE
         if ( $teardown ) {
             $code .= "    $teardown->('$test');\n";
@@ -563,7 +571,7 @@ $disable_test_nowarnings
     END_CODE
     $code .= <<'    END_CODE';
 {
-    $ENV{TEST_AGGREGATE} = 1;
+    BEGIN { $ENV{TEST_AGGREGATE} = 1 };
 
     END {   # for VMS
         delete $ENV{TEST_AGGREGATE};
@@ -672,8 +680,7 @@ $disable_test_nowarnings
                 # libraries (and not the test files) which multiple test files
                 # use.  As a result, it can be extremely difficult to track
                 # this.  We may change this in the future.
-                next
-                  unless my $file = $FILE_FOR{$package};  # wasn't a test file
+                next unless my $file = $FILE_FOR{$package};
                 Test::More::is(
                     $TESTS_RUN{$package} || 0,
                     $plan || 0,
@@ -926,6 +933,29 @@ C<run_the_tests> lines and gradually reintroducing them until you can figure
 out which one is actually causing the failure.
 
 =head1 COMMON PITFALLS
+
+=head2 My Tests Through an Exception But Passed Anyway!
+
+This really isn't a C<Test::Aggregate> problem so much as a general Perl
+problem.  For each test file, C<Test::Aggregate> wraps the tests in an eval
+and checks C<< my $error = $@ >>.  Unfortunately, we sometimes get code like
+this:
+
+  $server->ip_address('apple');
+
+And internally, the 'Server' class throws an exception but uses its own evals
+in a C<DESTROY> block (or something similar) to trap it.  If the code you call
+uses an eval but fails to localize it, it wipes out I<your> eval.  Neat, eh?
+Thus, you never get a chance to see the error.  For various reasons, this
+tends to impact C<Test::Aggregate> when a C<DESTROY> block is triggered and
+calls code which internally uses eval (e.g., C<DBIx::Class>).  You can often
+fix this with:
+
+ DESTROY {
+    local $@ = $@;  # localize but preserve the value
+    my $self = shift;
+    # do whatever you want
+ }
 
 =head2 C<BEGIN> and C<END> blocks
 

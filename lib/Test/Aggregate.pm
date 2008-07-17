@@ -32,11 +32,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.24
+Version 0.30
 
 =cut
 
-$VERSION = '0.24';
+$VERSION = '0.30';
 
 =head1 SYNOPSIS
 
@@ -556,6 +556,7 @@ BEGIN {
         if ( $PLAN_FOR{$callpack} ) {
             $PLAN_FOR{$callpack}--;
         }
+        $TEST_NOWARNINGS_LOADED{$callpack} = 1;
     };
 }
         END_CODE
@@ -565,6 +566,7 @@ BEGIN {
 my %PLAN_FOR;
 my %TESTS_RUN;
 my %FILE_FOR;
+my %TEST_NOWARNINGS_LOADED;
     END_CODE
     $code .= <<"    END_CODE";
 $disable_test_nowarnings
@@ -610,8 +612,15 @@ $disable_test_nowarnings
     BEGIN { $plan = \&Test::Builder::plan }
     sub Test::Builder::plan {
         delete $_[0]->{Have_Plan};
+        my $callpack = caller(1);
         if ( 'tests' eq ( $_[1] || '' ) ) {
-            $PLAN_FOR{caller(1)} = $_[2];
+            $PLAN_FOR{$callpack} = $_[2];
+            if ( $TEST_NOWARNINGS_LOADED{$callpack} ) {
+
+                # Test::NoWarnings was loaded before plan() was called, so it
+                # didn't have a change to decrement it
+                $PLAN_FOR{$callpack}--;
+            }
         }
         $plan->(@_);
     }

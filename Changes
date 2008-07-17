@@ -1,5 +1,9 @@
 Revision history for Test-Aggregate
 
+0.30    17/07/2008
+        - Resolved final (known) bug with Test::NoWarnings.  If it's loaded
+          before the plan is set, make sure we still adjust the plan.
+
 0.24    15/07/2008
         - Document the 'local $@' problem in "COMMON PITFALLS".
         - Ensure that dump file also forces a failure outside the eval().

@@ -1,5 +1,9 @@
 Revision history for Test-Aggregate
 
+0.31    22/07/2008
+        - Minor bugfix to play well with Test::Most (reset test failure when
+          forcing failure after test program eval).
+
 0.30    17/07/2008
         - Resolved final (known) bug with Test::NoWarnings.  If it's loaded
           before the plan is set, make sure we still adjust the plan.

@@ -32,11 +32,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.30
+Version 0.31
 
 =cut
 
-$VERSION = '0.30';
+$VERSION = '0.31';
 
 =head1 SYNOPSIS
 
@@ -366,6 +366,7 @@ sub run {
     }
 
     $self->_startup->() if $self->_startup;
+    my $builder = Test::Builder->new;
     foreach my $data ($self->_packages) {
         my ( $test, $package ) = @$data;
         Test::More::diag("******** running tests for $test ********")
@@ -375,6 +376,11 @@ sub run {
         if ( my $error = $@ ) {
             Test::More::ok( 0, "Error running ($test):  $error" );
         }
+
+        # XXX this should be fine since these keys are not actually used
+        # internally.
+        $builder->{XXX_test_failed}       = 0;
+        $builder->{TEST_MOST_test_failed} = 0;
         $self->_teardown->() if $self->_teardown;
     }
     $self->_shutdown->() if $self->_shutdown;
@@ -405,8 +411,12 @@ my \$LAST_TEST_NUM = 0;
 
     my $dump = $self->_dump;
 
-    $code
-      .= "\nif ( __FILE__ eq '$dump' ) {\n    package Test::Aggregate; # ;)\n";
+    $code .= <<"    END_CODE";
+if ( __FILE__ eq '$dump' ) {
+    package Test::Aggregate; # ;)
+    my \$builder = Test::Builder->new;
+    END_CODE
+
     if ( $startup ) {
         $code .= "    $startup->() if __FILE__ eq '$dump';\n";
     }
@@ -438,6 +448,10 @@ my \$LAST_TEST_NUM = 0;
     eval { $package->run_the_tests };
     if ( my \$error = \$@ ) {
         Test::More::ok( 0, "Error running ($test):  \$error" );
+        # XXX this should be fine since these keys are not actually used
+        # internally.
+        \$builder->{XXX_test_failed}       = 0;
+        \$builder->{TEST_MOST_test_failed} = 0;
     }
         END_CODE
         if ( $teardown ) {

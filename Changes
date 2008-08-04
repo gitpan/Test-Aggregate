@@ -1,5 +1,9 @@
 Revision history for Test-Aggregate
 
+0.32_03 04/08/2008
+        - Removed dump.t from MANIFEST.  Causes tests to fail.
+        - t/aggregate.t once again deletes the dump.t file after the test run.
+
 0.32_02 03/08/2008
         - Added Test::Aggregate::Builder to the MANIFEST.
 

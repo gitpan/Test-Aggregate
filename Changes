@@ -1,5 +1,10 @@
 Revision history for Test-Aggregate
 
+0.32_04 08/08/2008
+        - Add ($current_test out of $total_tests) to test output.  For large
+          test suites, it's handy to know how far through the test run you
+          are.
+
 0.32_03 04/08/2008
         - Removed dump.t from MANIFEST.  Causes tests to fail.
         - t/aggregate.t once again deletes the dump.t file after the test run.

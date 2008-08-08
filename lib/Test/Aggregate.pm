@@ -33,11 +33,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.32_03
+Version 0.32_04
 
 =cut
 
-$VERSION = '0.32_03';
+$VERSION = '0.32_04';
 
 =head1 SYNOPSIS
 
@@ -362,6 +362,13 @@ sub run {
         print FH $code;
         close FH;
     }
+
+    # XXX Theoretically the 'eval $code' could run the tests directly and
+    # remove a lot of annoying duplication, but unfortunately, we can't
+    # properly capture the startup/shutdown/setup/teardown behavior there
+    # without mandating that Data::Dump::Streamer be installed.  As a result,
+    # this eval'ed code has a check to not actually run the tests if we are
+    # not in the dump file.
     eval $code;
     if ( my $error = $@ ) {
         croak("Could not run tests: $@");
@@ -369,6 +376,7 @@ sub run {
 
     $self->_startup->() if $self->_startup;
     my $builder = Test::Builder->new;
+    
     foreach my $data ($self->_packages) {
         my ( $test, $package ) = @$data;
         Test::More::diag("******** running tests for $test ********")
@@ -422,7 +430,12 @@ if ( __FILE__ eq '$dump' ) {
     if ( $startup ) {
         $code .= "    $startup->() if __FILE__ eq '$dump';\n";
     }
-    foreach my $test ($self->_get_tests) {
+
+    my @tests = $self->_get_tests;
+    my $current_test = 0;
+    my $total_tests  = @tests;
+    foreach my $test (@tests) {
+        $current_test++;
         my $test_code = $self->_slurp($test);
 
         # get rid of hashbangs as Perl::Tidy gets all huffy-like and we
@@ -476,7 +489,7 @@ if ( __FILE__ eq '$dump' ) {
             last;
         }
     }
-    my \$ok = \$failed ? "not ok - $test" : "    ok - $test";
+    my \$ok = \$failed ? "not ok - $test" : "    ok - $test ($current_test out of $total_tests)";
     if ( \$failed or $verbose == $VERBOSE{all} ) {
         Test::More::diag(\$ok);
     }

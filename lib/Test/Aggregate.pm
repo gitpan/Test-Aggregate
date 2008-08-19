@@ -33,11 +33,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.32_04
+Version 0.32_05
 
 =cut
 
-$VERSION = '0.32_04';
+$VERSION = '0.32_05';
 
 =head1 SYNOPSIS
 
@@ -176,6 +176,11 @@ each test:
 
 This is the default behavior.
 
+=item * C<dry>
+
+Just print the tests which will be run and the order they will be run in
+(obviously the order will be random if C<shuffle> is true).
+
 =item * C<tidy>
 
 If supplied a true value, attempts to run C<Perl::Tidy> on the source code.
@@ -262,6 +267,7 @@ sub new {
     $self->{$_} = delete $arg_for->{$_} foreach (
         qw/
         dump
+        dry
         set_filenames
         shuffle
         verbose
@@ -308,6 +314,7 @@ sub _setup           { shift->{setup} }
 sub _teardown        { shift->{teardown} }
 sub _tidy            { shift->{tidy} }
 sub _test_nowarnings { shift->{test_nowarnings} }
+sub _dry             { shift->{dry} }
 
 sub _verbose        {
     my $self = shift;
@@ -353,7 +360,17 @@ sub _shuffle {
 sub run {
     my $self  = shift;
 
-    my $code = $self->_build_aggregate_code;
+    my @tests = $self->_get_tests;
+    if ( $self->_dry ) {
+        my $current = 1;
+        my $total   = @tests;
+        foreach my $test (@tests) {
+            print "$test (File $current out of $total)\n";
+            $current++;
+        }
+        return;
+    }
+    my $code = $self->_build_aggregate_code(@tests);
 
     my $dump = $self->_dump;
     if ( $dump ne '' ) {
@@ -397,7 +414,7 @@ sub run {
 }
 
 sub _build_aggregate_code {
-    my $self = shift;
+    my ( $self, @tests ) = @_;
     my $code = $self->_test_builder_override;
 
     my ( $startup,  $startup_code )  = $self->_as_code('startup');
@@ -431,7 +448,6 @@ if ( __FILE__ eq '$dump' ) {
         $code .= "    $startup->() if __FILE__ eq '$dump';\n";
     }
 
-    my @tests = $self->_get_tests;
     my $current_test = 0;
     my $total_tests  = @tests;
     foreach my $test (@tests) {

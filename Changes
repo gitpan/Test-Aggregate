@@ -1,5 +1,8 @@
 Revision history for Test-Aggregate
 
+0.33    03/09/2008
+        - Upload 0.32_05 as a non-development release.
+
 0.32_05 19/08/2007
         - Added 'dry' switch to let us see which tests are going to be run
           without running them.

@@ -4,7 +4,6 @@ use warnings;
 use strict;
 
 use Test::Builder::Module;
-use Test::Aggregate::Builder;
 use Test::More;
 use Carp 'croak';
 
@@ -33,11 +32,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.33
+Version 0.34_01
 
 =cut
 
-$VERSION = '0.33';
+$VERSION = '0.34_01';
 
 =head1 SYNOPSIS
 
@@ -176,6 +175,13 @@ each test:
 
 This is the default behavior.
 
+=item * C<findbin> (optional)
+
+If supplied with a true value, this will cause FindBin::again() to be called
+before each test file.
+
+This is turned off by default.
+
 =item * C<dry>
 
 Just print the tests which will be run and the order they will be run in
@@ -235,6 +241,7 @@ sub new {
         
     $arg_for->{test_nowarnings} = 1 unless exists $arg_for->{test_nowarnings};
     $arg_for->{set_filenames}   = 1 unless exists $arg_for->{set_filenames};
+    $arg_for->{findbin}         = 0 unless exists $arg_for->{findbin};
     my $dirs = delete $arg_for->{dirs};
     $dirs = [$dirs] if 'ARRAY' ne ref $dirs;
 
@@ -269,6 +276,7 @@ sub new {
         dump
         dry
         set_filenames
+        findbin
         shuffle
         verbose
         tidy
@@ -307,6 +315,7 @@ sub _dump            { shift->{dump} || '' }
 sub _should_shuffle  { shift->{shuffle} }
 sub _matching        { shift->{matching} }
 sub _set_filenames   { shift->{set_filenames} }
+sub _findbin         { shift->{findbin} }
 sub _dirs            { @{ shift->{dirs} } }
 sub _startup         { shift->{startup} }
 sub _shutdown        { shift->{shutdown} }
@@ -493,6 +502,10 @@ if ( __FILE__ eq '$dump' ) {
         my $set_filenames = $self->_set_filenames
             ? "local \$0 = '$test';"
             : '';
+        my $findbin = $self->_findbin ? <<'        END_CODE' : '';
+my $reinit_findbin = FindBin->can(q/again/);
+$reinit_findbin->() if $reinit_findbin;
+        END_CODE
         my $see_if_tests_passed = $verbose ? <<"        END_CODE" : '';
 {
     my \$builder = Test::Builder->new;   # singleton
@@ -519,6 +532,7 @@ package $package;
 sub run_the_tests {
 \$Test::Aggregate::Builder::FILE_FOR{$package} = '$test';
 $set_filenames
+$findbin
 # line 1 "$test"
 $test_code
 $see_if_tests_passed

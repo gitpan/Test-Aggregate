@@ -32,11 +32,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.34_01
+Version 0.34_02
 
 =cut
 
-$VERSION = '0.34_01';
+$VERSION = '0.34_02';
 
 =head1 SYNOPSIS
 
@@ -182,11 +182,6 @@ before each test file.
 
 This is turned off by default.
 
-=item * C<dry>
-
-Just print the tests which will be run and the order they will be run in
-(obviously the order will be random if C<shuffle> is true).
-
 =item * C<tidy>
 
 If supplied a true value, attempts to run C<Perl::Tidy> on the source code.
@@ -241,7 +236,7 @@ sub new {
         
     $arg_for->{test_nowarnings} = 1 unless exists $arg_for->{test_nowarnings};
     $arg_for->{set_filenames}   = 1 unless exists $arg_for->{set_filenames};
-    $arg_for->{findbin}         = 0 unless exists $arg_for->{findbin};
+    $arg_for->{findbin}         = 1 unless exists $arg_for->{findbin};
     my $dirs = delete $arg_for->{dirs};
     $dirs = [$dirs] if 'ARRAY' ne ref $dirs;
 
@@ -274,7 +269,6 @@ sub new {
     $self->{$_} = delete $arg_for->{$_} foreach (
         qw/
         dump
-        dry
         set_filenames
         findbin
         shuffle
@@ -323,7 +317,6 @@ sub _setup           { shift->{setup} }
 sub _teardown        { shift->{teardown} }
 sub _tidy            { shift->{tidy} }
 sub _test_nowarnings { shift->{test_nowarnings} }
-sub _dry             { shift->{dry} }
 
 sub _verbose        {
     my $self = shift;
@@ -369,17 +362,7 @@ sub _shuffle {
 sub run {
     my $self  = shift;
 
-    my @tests = $self->_get_tests;
-    if ( $self->_dry ) {
-        my $current = 1;
-        my $total   = @tests;
-        foreach my $test (@tests) {
-            print "$test (File $current out of $total)\n";
-            $current++;
-        }
-        return;
-    }
-    my $code = $self->_build_aggregate_code(@tests);
+    my $code = $self->_build_aggregate_code;
 
     my $dump = $self->_dump;
     if ( $dump ne '' ) {
@@ -388,13 +371,6 @@ sub run {
         print FH $code;
         close FH;
     }
-
-    # XXX Theoretically the 'eval $code' could run the tests directly and
-    # remove a lot of annoying duplication, but unfortunately, we can't
-    # properly capture the startup/shutdown/setup/teardown behavior there
-    # without mandating that Data::Dump::Streamer be installed.  As a result,
-    # this eval'ed code has a check to not actually run the tests if we are
-    # not in the dump file.
     eval $code;
     if ( my $error = $@ ) {
         croak("Could not run tests: $@");
@@ -402,7 +378,6 @@ sub run {
 
     $self->_startup->() if $self->_startup;
     my $builder = Test::Builder->new;
-    
     foreach my $data ($self->_packages) {
         my ( $test, $package ) = @$data;
         Test::More::diag("******** running tests for $test ********")
@@ -423,7 +398,7 @@ sub run {
 }
 
 sub _build_aggregate_code {
-    my ( $self, @tests ) = @_;
+    my $self = shift;
     my $code = $self->_test_builder_override;
 
     my ( $startup,  $startup_code )  = $self->_as_code('startup');
@@ -456,11 +431,7 @@ if ( __FILE__ eq '$dump' ) {
     if ( $startup ) {
         $code .= "    $startup->() if __FILE__ eq '$dump';\n";
     }
-
-    my $current_test = 0;
-    my $total_tests  = @tests;
-    foreach my $test (@tests) {
-        $current_test++;
+    foreach my $test ($self->_get_tests) {
         my $test_code = $self->_slurp($test);
 
         # get rid of hashbangs as Perl::Tidy gets all huffy-like and we
@@ -473,10 +444,6 @@ if ( __FILE__ eq '$dump' ) {
 
         if ( $test_code =~ /^(__(?:DATA|END)__)/m ) {
             Test::More::BAIL_OUT("Test $test not allowed to have $1 token");
-        }
-        if ( $test_code =~ /skip_all/m ) {
-            warn
-              "Found possible 'skip_all'.  This can cause test suites to abort";
         }
         my $package   = $self->_get_package($test);
         push @{ $self->{_packages} } => [ $test, $package ];
@@ -518,7 +485,7 @@ $reinit_findbin->() if $reinit_findbin;
             last;
         }
     }
-    my \$ok = \$failed ? "not ok - $test" : "    ok - $test ($current_test out of $total_tests)";
+    my \$ok = \$failed ? "not ok - $test" : "    ok - $test";
     if ( \$failed or $verbose == $VERBOSE{all} ) {
         Test::More::diag(\$ok);
     }
@@ -528,15 +495,22 @@ $reinit_findbin->() if $reinit_findbin;
         $test_packages .= <<"        END_CODE";
 {
 $separator beginning of $test $separator
-package $package;
-sub run_the_tests {
+    package $package;
+    sub run_the_tests {
+        AGGTESTBLOCK: {
+        if ( my \$reason = \$Test::Aggregate::Builder::SKIP_REASON_FOR{$package} )
+        {
+            Test::Builder->new->skip(\$reason);
+            last AGGTESTBLOCK;
+        }
 \$Test::Aggregate::Builder::FILE_FOR{$package} = '$test';
 $set_filenames
 $findbin
 # line 1 "$test"
 $test_code
 $see_if_tests_passed
-}
+        } # END AGGTESTBLOCK:
+    }
 $separator end of $test $separator
 }
         END_CODE
@@ -759,12 +733,6 @@ This is needed when you use C<check_plan> and have C<Test::NoWarnings> used.
 This is because we do work internally to subtract the extra test added by
 C<Test::NoWarnings>.  It's painful and experimental.  Good luck.
     
-=item * No 'skip_all' tests, please
-
-Tests which potentially 'skip_all' will cause the aggregate test suite to
-abort prematurely.  Do not attempt to aggregate them.  This may be fixed in a
-future release.
-
 =item * C<Variable "$x" will not stay shared at (eval ...>
 
 Because each test is wrapped in a method call, any of your subs which access a

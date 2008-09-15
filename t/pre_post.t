@@ -26,7 +26,6 @@ my $tests = Test::Aggregate->new(
         shutdown => sub { $shutdown++ },
         setup    => sub { $setup++ },
         teardown => sub { $teardown++ },
-        dump     => 'dump.t',
     }
 );
 $tests->run;

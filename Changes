@@ -1,5 +1,9 @@
 Revision history for Test-Aggregate
 
+0.34_03 15/09/2008
+        - Again cleaned up dump file generated when running tests.  Need to
+          guard against that better.  Also removed it from the MANIFEST.
+
 0.34_02 14/09/2008
         - Allow skip_all tests.
 

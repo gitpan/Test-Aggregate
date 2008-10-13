@@ -1,5 +1,13 @@
 Revision history for Test-Aggregate
 
+0.34_07 13/10/2008
+        - Fixed bug where dump file tests would fail if check_plan is set to
+          true.
+        - Common environment variables are now localized on a "per test file"
+          basis.
+        - Make the "5.006" requirement explicit in the Build.PL and
+          Makefile.PL scripts.
+
 0.34_06 21/10/2008
         - Skip findbin test if FindBin < 1.47.  Seems to cause test failures
           as FindBin *appears* to be getting confused by the setting of $0,

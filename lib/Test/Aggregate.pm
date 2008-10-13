@@ -32,11 +32,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.34_06
+Version 0.34_07
 
 =cut
 
-$VERSION = '0.34_06';
+$VERSION = '0.34_07';
 
 =head1 SYNOPSIS
 
@@ -475,6 +475,7 @@ sub ::see_if_tests_passed {
 }
 
 sub ::run_this_test_program {
+    package Test::Aggregate;
     my ( \$package, \$test ) = \@_;
     Test::More::diag("******** running tests for \$test ********") if \$ENV{TEST_VERBOSE};
     eval { \$package->run_the_tests };
@@ -546,6 +547,12 @@ if ( __FILE__ eq '$dump' ) {
 $separator beginning of $test $separator
     package $package;
     sub run_the_tests {
+        # localize some popular globals
+        no warnings 'uninitialized';
+        local \%ENV = \%ENV; local \$/ = \$/; local \@INC = \@INC; 
+        local \%INC = \%INC; local \$_ = \$_; local \$|   = \$|; 
+        local \%SIG = \%SIG;
+        use warnings 'uninitialized';
         AGGTESTBLOCK: {
         if ( my \$reason = \$Test::Aggregate::Builder::SKIP_REASON_FOR{$package} ) {
             Test::Builder->new->skip(\$reason);
@@ -727,6 +734,37 @@ The setup function will be run before every test program.
  }
 
 The teardown function gets run after every test program.
+
+=back
+
+=head1 GLOBAL VARIABLES
+
+You shouldn't be using global variables and a dependence on them can break
+your code.  However, Perl provides quite a few handy global variables which,
+unfortunately, can easily break your tests if you change them in one test and
+another assumes an unchanged value.  As a result, we localize many of Perl's
+most common global variables for you, using the following syntax:
+
+    local %ENV = %ENV; 
+    
+The following global variables are localized for you.  Any others must be
+localized manually per test.
+
+=over 4
+
+=item * C<@INC>
+
+=item * C<%INC>
+
+=item * C<%ENV>
+
+=item * C<%SIG>
+
+=item * C<$/>
+
+=item * C<$_>
+
+=item * C<$|>
 
 =back
 

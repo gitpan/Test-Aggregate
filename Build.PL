@@ -2,6 +2,8 @@ use strict;
 use warnings;
 use Module::Build;
 
+use 5.006;
+
 my $builder = Module::Build->new(
     module_name       => 'Test::Aggregate',
     license           => 'perl',
@@ -20,7 +22,6 @@ my $builder = Module::Build->new(
         'Perl::Tidy'           => 20060614,
     },
     add_to_cleanup     => ['Test-Aggregate-*'],
-    create_makefile_pl => 'traditional',
 );
 
 $builder->create_build_script();

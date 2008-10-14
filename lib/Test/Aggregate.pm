@@ -32,11 +32,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.34_07
+Version 0.34_08
 
 =cut
 
-$VERSION = '0.34_07';
+$VERSION = '0.34_08';
 
 =head1 SYNOPSIS
 
@@ -409,12 +409,18 @@ sub run {
 
     $self->_startup->() if $self->_startup;
     my $builder = Test::Builder->new;
-    foreach my $data ($self->_packages) {
+
+    # some tests may have been run in BEGIN blocks
+    $builder->{TEST_AGGREGATE_last_test} = @{ $builder->{Test_Results} } || 0;
+
+    my $current_test = 0;
+    my @packages     = $self->_packages;
+    my $total_tests  = @packages;
+    foreach my $data (@packages) {
+        $current_test++;
         my ( $test, $package ) = @$data;
-        Test::More::diag("******** running tests for $test ********")
-          if $ENV{TEST_VERBOSE};
         $self->_setup->() if $self->_setup;
-        eval { $package->run_the_tests };
+        _run_this_test_program( $package => $test, $current_test, $total_tests, 2 );
         if ( my $error = $@ ) {
             Test::More::ok( 0, "Error running ($test):  $error" );
         }
@@ -426,6 +432,68 @@ sub run {
         $self->_teardown->() if $self->_teardown;
     }
     $self->_shutdown->() if $self->_shutdown;
+}
+
+sub _any_tests_failed {
+    my $failed  = 0; 
+    my $builder = Test::Builder->new;
+    my @summary = $builder->summary;
+    foreach my $passed (@summary[ $builder->{TEST_AGGREGATE_last_test} ..
+        $builder->current_test - 1 ]) {
+        if (not $passed) {
+            $failed = 1;
+            last;
+        }
+    }
+    return $failed;
+}
+
+sub _run_this_test_program {
+    my $builder = Test::Builder->new;
+    my ( $package, $test, $current_test, $num_tests, $verbose ) = @_;
+    Test::More::diag("******** running tests for $test ********") if $ENV{TEST_VERBOSE};
+    my $error = eval { 
+        if ( my $reason = $Test::Aggregate::Builder::SKIP_REASON_FOR{$package} ) {
+            Test::Builder->new->skip($reason);
+            return;
+        }
+        else {
+            local $@;
+            # localize some popular globals
+            no warnings 'uninitialized';
+            local %ENV = %ENV;
+            local $/   = $/;
+            local @INC = @INC;
+            local $_   = $_;
+            local $|   = $|;
+            local %SIG = %SIG;
+            use warnings 'uninitialized';
+            $Test::Aggregate::Builder::FILE_FOR{$package} = $test;
+            eval { $package->run_the_tests };
+            $@;
+        }
+    };
+
+    if ($verbose) {
+        my $test_name = "$test ($current_test out of $num_tests)";
+        my $failed    = _any_tests_failed();
+        chomp $error if defined $error;
+        $error &&= "($error)";
+        my $ok = $failed || $error
+                ? "not ok - $test_name $error"
+                : "    ok - $test_name";
+        Test::More::diag($ok) if $error or $failed or $verbose == $VERBOSE{all};
+        if ($error or $failed) {
+            Test::More::ok(0, "Error running ($test):  $error");
+            # XXX this should be fine since these keys are not actually used
+            # internally.
+            $builder->{XXX_test_failed}       = 0;
+            $builder->{TEST_MOST_test_failed} = 0;
+        }
+    }
+    $builder->{TEST_AGGREGATE_last_test} = $builder->current_test;
+
+    return unless $error;
 }
 
 sub _build_aggregate_code {
@@ -453,40 +521,7 @@ $startup_code
 $shutdown_code
 $setup_code
 $teardown_code
-my \$LAST_TEST_NUM = 0;
 $findbin
-
-sub ::see_if_tests_passed {
-    my ( \$test_name, \$verbose ) = \@_;
-    my \$tests   = \$BUILDER->current_test;
-    my \$failed = 0;
-    my \@summary = \$BUILDER->summary;
-    foreach my \$passed ( \@summary[\$LAST_TEST_NUM .. \$tests - 1] ) {
-        if ( not \$passed ) {
-            \$failed = 1;
-            last;
-        }
-    }
-    my \$ok = \$failed ? "not ok - \$test_name" : "    ok - \$test_name";
-    if ( \$failed or \$verbose == $VERBOSE{all} ) {
-        Test::More::diag(\$ok);
-    }
-    \$LAST_TEST_NUM = \$tests;
-}
-
-sub ::run_this_test_program {
-    package Test::Aggregate;
-    my ( \$package, \$test ) = \@_;
-    Test::More::diag("******** running tests for \$test ********") if \$ENV{TEST_VERBOSE};
-    eval { \$package->run_the_tests };
-
-    return unless my \$error = \$@;
-    Test::More::ok( 0, "Error running (\$test):  \$error" );
-    # XXX this should be fine since these keys are not actually used
-    # internally.
-    \$BUILDER->{XXX_test_failed}       = 0;
-    \$BUILDER->{TEST_MOST_test_failed} = 0;
-}
     END_CODE
     
     my @packages;
@@ -496,10 +531,7 @@ sub ::run_this_test_program {
 
     my $dump = $self->_dump;
 
-    $code .= <<"    END_CODE";
-if ( __FILE__ eq '$dump' ) {
-    package Test::Aggregate; # ;)
-    END_CODE
+    $code .= "if ( __FILE__ eq '$dump' ) {\n";
 
     if ( $startup ) {
         $code .= "    $startup->() if __FILE__ eq '$dump';\n";
@@ -527,7 +559,7 @@ if ( __FILE__ eq '$dump' ) {
         if ( $setup ) {
             $code .= "    $setup->('$test');\n";
         }
-        $code .= qq{    ::run_this_test_program( $package => "$test" );};
+        $code .= qq{    Test::Aggregate::_run_this_test_program( $package => "$test", $current_test, $total_tests, $verbose );};
 
         if ( $teardown ) {
             $code .= "    $teardown->('$test');\n";
@@ -537,34 +569,15 @@ if ( __FILE__ eq '$dump' ) {
         my $set_filenames = $self->_set_filenames
             ? "local \$0 = '$test';"
             : '';
-
-        my $test_name = "$test ($current_test out of $total_tests)";
-        my $see_if_tests_passed = $verbose 
-            ? qq{        ::see_if_tests_passed( "$test_name", $verbose );}
-            : '';
         $test_packages .= <<"        END_CODE";
 {
 $separator beginning of $test $separator
     package $package;
     sub run_the_tests {
-        # localize some popular globals
-        no warnings 'uninitialized';
-        local \%ENV = \%ENV; local \$/ = \$/; local \@INC = \@INC; 
-        local \%INC = \%INC; local \$_ = \$_; local \$|   = \$|; 
-        local \%SIG = \%SIG;
-        use warnings 'uninitialized';
-        AGGTESTBLOCK: {
-        if ( my \$reason = \$Test::Aggregate::Builder::SKIP_REASON_FOR{$package} ) {
-            Test::Builder->new->skip(\$reason);
-            last AGGTESTBLOCK;
-        }
-        \$Test::Aggregate::Builder::FILE_FOR{$package} = '$test';
         $set_filenames
         \$REINIT_FINDBIN->();
 # line 1 "$test"
 $test_code
-        } # END AGGTESTBLOCK:
-$see_if_tests_passed
     }
 $separator end of $test $separator
 }
@@ -753,8 +766,6 @@ localized manually per test.
 =over 4
 
 =item * C<@INC>
-
-=item * C<%INC>
 
 =item * C<%ENV>
 

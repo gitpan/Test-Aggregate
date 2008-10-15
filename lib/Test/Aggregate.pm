@@ -32,11 +32,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.34_08
+Version 0.34_09
 
 =cut
 
-$VERSION = '0.34_08';
+$VERSION = '0.34_09';
 
 =head1 SYNOPSIS
 
@@ -112,10 +112,19 @@ following keys:
 
 =over 4
 
-=item * C<dirs> (mandatory)
+=item * C<dirs> (either this or C<tests> is mandatory)
 
 The directories to look in for the aggregated tests.  This may be a scalar
 value of a single directory or an array refernce of multiple directories.
+
+=item * C<tests> (either this or C<dirs> is mandatory)
+
+Instead of providing directories for the aggregated tests, you may supply an
+array reference with a list of tests to aggregate.  If both are supplied,
+these tests will be appended to the list of tests found in C<dirs>.
+
+The C<matching> parameter does not apply to test files identified with this
+key.
 
 =item * C<verbose> (optional, but strongly recommended)
 
@@ -241,15 +250,25 @@ sub _code_attributes {
 sub new {
     my ( $class, $arg_for ) = @_;
 
-    unless ( exists $arg_for->{dirs} ) {
-        Test::More::BAIL_OUT("You must supply 'dirs'");
+    unless ( exists $arg_for->{dirs} || exists $arg_for->{tests} ) {
+        Test::More::BAIL_OUT("You must supply 'dirs' or 'tests'");
+    }
+    if ( exists $arg_for->{tests} && 'ARRAY' ne ref $arg_for->{tests} ) {
+        Test::More::BAIL_OUT(
+            "Argument for Test::Aggregate 'tests' key must be an array reference"
+        );
     }
         
     $arg_for->{test_nowarnings} = 1 unless exists $arg_for->{test_nowarnings};
     $arg_for->{set_filenames}   = 1 unless exists $arg_for->{set_filenames};
     $arg_for->{findbin}         = 1 unless exists $arg_for->{findbin};
     my $dirs = delete $arg_for->{dirs};
-    $dirs = [$dirs] if 'ARRAY' ne ref $dirs;
+    if ( defined $dirs ) {
+        $dirs = [$dirs] if 'ARRAY' ne ref $dirs;
+    }
+    else {
+        $dirs = [];
+    }
 
     my $matching = qr//;
     if ( $arg_for->{matching} ) {
@@ -279,18 +298,20 @@ sub new {
     } => $class;
     $self->{$_} = delete $arg_for->{$_} foreach (
         qw/
-        dump
-        dry
-        set_filenames
-        findbin
-        shuffle
-        verbose
-        tidy
         check_plan
+        dry
+        dump
+        findbin
+        set_filenames
+        shuffle
         test_nowarnings
+        tests
+        tidy
+        verbose
         /,
         $class->_code_attributes
     );
+    $self->{tests} ||= [];
 
     if ( my @keys = keys %$arg_for ) {
         local $" = ', ';
@@ -328,6 +349,7 @@ sub _startup         { shift->{startup} }
 sub _shutdown        { shift->{shutdown} }
 sub _setup           { shift->{setup} }
 sub _teardown        { shift->{teardown} }
+sub _tests           { @{ shift->{tests} } }
 sub _tidy            { shift->{tidy} }
 sub _test_nowarnings { shift->{test_nowarnings} }
 
@@ -344,12 +366,15 @@ sub _get_tests {
     my $self = shift;
     my @tests;
     my $matching = $self->_matching;
-    find( {
-            no_chdir => 1,
-            wanted   => sub {
-                push @tests => $File::Find::name if /\.t\z/ && /$matching/;
-            }
-    }, $self->_dirs );
+    if ( $self->_dirs ) {
+        find( {
+                no_chdir => 1,
+                wanted   => sub {
+                    push @tests => $File::Find::name if /\.t\z/ && /$matching/;
+                }
+        }, $self->_dirs );
+    }
+    push @tests => $self->_tests;
     
     if ( $self->_should_shuffle ) {
         $self->_shuffle(@tests);

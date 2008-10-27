@@ -1,5 +1,11 @@
 Revision history for Test-Aggregate
 
+0.35    27/10/2008
+        - Move from developer to production version number.
+        - Add 'use Test::Aggregate' to the dump file.
+        - Updated the docs to explain that the C<Test::More> functions are
+          re-exported.
+
 0.34_09 15/10/2008
         - Added 'tests' key to the constructor.  This is an optional method of
           identifying which tests you wish to aggregate.

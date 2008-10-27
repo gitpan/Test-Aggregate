@@ -32,11 +32,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.34_09
+Version 0.35
 
 =cut
 
-$VERSION = '0.34_09';
+$VERSION = '0.35';
 
 =head1 SYNOPSIS
 
@@ -46,6 +46,8 @@ $VERSION = '0.34_09';
         dirs => $aggregate_test_dir,
     } );
     $tests->run;
+
+    ok $some_data, 'Test::Aggregate also re-exports Test::More functions';
 
 =head1 DESCRIPTION
 
@@ -73,11 +75,25 @@ your regular test directory (C<t/> is the standard):
  });
  $tests->run;
 
+ ok $some_data, 'Test::Aggregate also re-exports Test::More functions';
+
 Take your simplest tests and move them, one by one, into the new test
 directory and keep running the C<Test::Aggregate> program.  You'll find some
 tests will not run in a shared environment like this.  You can either fix the
 tests or simply leave them in your regular test directory.  See how this
 distribution's tests are organized for an example.
+
+Note that C<Test::Aggregate> also exports all exported functions from
+C<Test::More>, allowing you to run other tests after the aggregated tests have
+run.
+
+ use Test::Aggregate;
+ my $other_test_dir = 'aggregate_tests';
+ my $tests = Test::Aggregate->new( {
+    dirs => $other_test_dir
+ });
+ $tests->run;
+ ok !(-f 't/data/tmp.txt'), '... and our temp file should be deleted';
 
 Some tests cannot run in an aggregate environment.  These may include
 test for this with the C<< $ENV{TEST_AGGREGATE} >> variable:
@@ -689,6 +705,7 @@ BEGIN {
     }
 
     return <<"    END_CODE";
+use Test::Aggregate;
 use Test::Aggregate::Builder;
 BEGIN { \$Test::Aggregate::Builder::CHECK_PLAN = $check_plan };
 $disable_test_nowarnings;

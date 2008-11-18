@@ -9,11 +9,27 @@ use Carp 'croak';
 
 use File::Find;
 
-use vars qw(@ISA @EXPORT $VERSION);
+use vars qw(@ISA @EXPORT @EXPORT_OK $VERSION);
 @ISA    = qw(Test::Builder::Module);
-@EXPORT = @Test::More::EXPORT;
+@EXPORT = (@Test::More::EXPORT, 'run_this_test_program');
 
-BEGIN { $ENV{TEST_AGGREGATE} = 1 };
+BEGIN { 
+    $ENV{TEST_AGGREGATE} = 1;
+    *CORE::GLOBAL::exit = sub {
+        my ($package, $filename, $line) = caller;
+        print STDERR <<"        END_EXIT_WARNING";
+********
+WARNING!
+exit called under Test::Aggregate at:
+File:    $filename
+Package: $package
+Line:    $line
+WARNING!
+********
+        END_EXIT_WARNING
+        exit(@_);
+    };
+};
 
 END {   # for VMS
     delete $ENV{TEST_AGGREGATE};
@@ -32,11 +48,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.35
+Version 0.35_01
 
 =cut
 
-$VERSION = '0.35';
+$VERSION = '0.35_01';
 
 =head1 SYNOPSIS
 
@@ -452,7 +468,7 @@ sub run {
     my $builder = Test::Builder->new;
 
     # some tests may have been run in BEGIN blocks
-    $builder->{TEST_AGGREGATE_last_test} = @{ $builder->{Test_Results} } || 0;
+    $builder->{'Test::Aggregate::Builder'}{last_test} = @{ $builder->{Test_Results} } || 0;
 
     my $current_test = 0;
     my @packages     = $self->_packages;
@@ -461,7 +477,7 @@ sub run {
         $current_test++;
         my ( $test, $package ) = @$data;
         $self->_setup->() if $self->_setup;
-        _run_this_test_program( $package => $test, $current_test, $total_tests, 2 );
+        run_this_test_program( $package => $test, $current_test, $total_tests, 2 );
         if ( my $error = $@ ) {
             Test::More::ok( 0, "Error running ($test):  $error" );
         }
@@ -479,8 +495,11 @@ sub _any_tests_failed {
     my $failed  = 0; 
     my $builder = Test::Builder->new;
     my @summary = $builder->summary;
-    foreach my $passed (@summary[ $builder->{TEST_AGGREGATE_last_test} ..
-        $builder->current_test - 1 ]) {
+    foreach my $passed (
+        @summary[ $builder->{'Test::Aggregate::Builder'}{last_test} 
+            ..
+        $builder->current_test - 1 ]
+    ) {
         if (not $passed) {
             $failed = 1;
             last;
@@ -489,13 +508,14 @@ sub _any_tests_failed {
     return $failed;
 }
 
-sub _run_this_test_program {
+sub run_this_test_program {
     my $builder = Test::Builder->new;
     my ( $package, $test, $current_test, $num_tests, $verbose ) = @_;
     Test::More::diag("******** running tests for $test ********") if $ENV{TEST_VERBOSE};
     my $error = eval { 
-        if ( my $reason = $Test::Aggregate::Builder::SKIP_REASON_FOR{$package} ) {
-            Test::Builder->new->skip($reason);
+        my $builder = Test::Builder->new;
+        if ( my $reason = $builder->{'Test::Aggregate::Builder'}{skip_reason_for}{$package} ) {
+            $builder->skip($reason);
             return;
         }
         else {
@@ -509,7 +529,7 @@ sub _run_this_test_program {
             local $|   = $|;
             local %SIG = %SIG;
             use warnings 'uninitialized';
-            $Test::Aggregate::Builder::FILE_FOR{$package} = $test;
+            $builder->{'Test::Aggregate::Builder'}{file_for}{$package} = $test;
             eval { $package->run_the_tests };
             $@;
         }
@@ -532,7 +552,7 @@ sub _run_this_test_program {
             $builder->{TEST_MOST_test_failed} = 0;
         }
     }
-    $builder->{TEST_AGGREGATE_last_test} = $builder->current_test;
+    $builder->{'Test::Aggregate::Builder'}{last_test} = $builder->current_test;
 
     return unless $error;
 }
@@ -600,7 +620,7 @@ $findbin
         if ( $setup ) {
             $code .= "    $setup->('$test');\n";
         }
-        $code .= qq{    Test::Aggregate::_run_this_test_program( $package => "$test", $current_test, $total_tests, $verbose );};
+        $code .= qq{    run_this_test_program( $package => "$test", $current_test, $total_tests, $verbose );};
 
         if ( $teardown ) {
             $code .= "    $teardown->('$test');\n";
@@ -695,10 +715,11 @@ BEGIN {
     *Test::NoWarnings::had_no_warnings = sub { };
     *Test::NoWarnings::import = sub {
         my $callpack = caller();
-        if ( $Test::Aggregate::Builder::PLAN_FOR{$callpack} ) {
-            $Test::Aggregate::Builder::PLAN_FOR{$callpack}--;
+        my $ta_builder = $BUILDER->{'Test::Aggregate::Builder'};
+        if ( $ta_builder->{plan_for}{$callpack} ) {
+            $ta_builder->{plan_for}{$callpack}--;
         }
-        $Test::Aggregate::Builder::TEST_NOWARNINGS_LOADED{$callpack} = 1;
+        $ta_builder->{test_nowarnings_loaded}{$callpack} = 1;
     };
 }
         END_CODE
@@ -707,10 +728,12 @@ BEGIN {
     return <<"    END_CODE";
 use Test::Aggregate;
 use Test::Aggregate::Builder;
-BEGIN { \$Test::Aggregate::Builder::CHECK_PLAN = $check_plan };
+my \$BUILDER;
+BEGIN { 
+    \$BUILDER = Test::Builder->new;
+    \$BUILDER->{'Test::Aggregate::Builder'}{check_plan} = $check_plan 
+};
 $disable_test_nowarnings;
-
-my \$BUILDER = Test::Builder->new;
     END_CODE
 }
 
@@ -827,6 +850,12 @@ Not all tests can be included with this technique.  If you have C<Test::Class>
 tests, there is no need to run them with this.  Otherwise:
 
 =over 4
+
+=item * C<exit>
+
+Don't call exit() in your aggregated tests.  We now warn very verbosely if
+this is done, but we still exit on the assumption that further tests cannot
+run.
 
 =item * C<__END__> and C<__DATA__> tokens.
 

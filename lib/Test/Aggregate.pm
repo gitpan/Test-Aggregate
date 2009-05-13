@@ -48,11 +48,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.35_01
+Version 0.35_02
 
 =cut
 
-$VERSION = '0.35_01';
+$VERSION = '0.35_02';
 
 =head1 SYNOPSIS
 
@@ -77,6 +77,21 @@ create a separate package for each test and wraps each package in a method
 named C<run_the_tests>.  This allows us to load perl only once and related
 modules only once.  If you have modules which are expensive to load, this can
 dramatically speed up a test suite.
+
+=head1 DEPRECATION
+
+For a whole variety of reasons, tests run in BEGIN/CHECK/INIT/INIT blocks are
+now deprecated.  They cause all sorts of test sequence headaches.  Plus, they
+break the up-coming nested TAP work.  You will have a problem if you use this
+common idiom:
+
+ BEGIN {
+     use_ok 'My::Module' or die;
+ }
+
+Instead, just C<use> the module and put the C<use_ok> tests in a t/load.t file
+or something similar and B<don't> aggregate it.  See the following for more
+information: L<http://use.perl.org/~Ovid/journal/38974>.
 
 =head1 USAGE
 
@@ -323,10 +338,11 @@ sub new {
     }
 
     my $self = bless {
-        dirs            => $dirs,
-        matching        => $matching,
-        _no_streamer    => 0,
-        _packages       => [],
+        dirs              => $dirs,
+        matching          => $matching,
+        _no_streamer      => 0,
+        _packages         => [],
+        aggregate_program => $0,
     } => $class;
     $self->{$_} = delete $arg_for->{$_} foreach (
         qw/
@@ -468,7 +484,9 @@ sub run {
     my $builder = Test::Builder->new;
 
     # some tests may have been run in BEGIN blocks
-    $builder->{'Test::Aggregate::Builder'}{last_test} = @{ $builder->{Test_Results} } || 0;
+    my $tab = 'Test::Aggregate::Builder';
+    $builder->{$tab}{last_test} = @{ $builder->{Test_Results} } || 0;
+    $builder->{$tab}{aggregate_program} = $self->{aggregate_program};
 
     my $current_test = 0;
     my @packages     = $self->_packages;
@@ -559,7 +577,8 @@ sub run_this_test_program {
 
 sub _build_aggregate_code {
     my ( $self, @tests ) = @_;
-    my $code = $self->_test_builder_override;
+    my $code = "\n# Built from $0\n";
+    $code .= $self->_test_builder_override;
 
     my ( $startup,  $startup_code )  = $self->_as_code('startup');
     my ( $shutdown, $shutdown_code ) = $self->_as_code('shutdown');
@@ -615,6 +634,7 @@ $findbin
         if ( $test_code =~ /^(__(?:DATA|END)__)/m ) {
             Test::More::BAIL_OUT("Test $test not allowed to have $1 token");
         }
+
         my $package   = $self->_get_package($test);
         push @{ $self->{_packages} } => [ $test, $package ];
         if ( $setup ) {
@@ -630,6 +650,17 @@ $findbin
         my $set_filenames = $self->_set_filenames
             ? "local \$0 = '$test';"
             : '';
+
+        if ( $self->_check_plan ) {
+            $test_code .= <<"            END";
+my \$tab   = Test::Builder->new->{'Test::Aggregate::Builder'};
+my \$plan  = \$tab->{plan_for}{'$package'} || 0;
+my \$file  = \$tab->{file_for}{'$package'};
+my \$tests = \$tab->{tests_run}{'$package'} || 0;
+Test::More::is( \$tests, \$plan, "Test (\$file) should have the correct plan" );
+            END
+        }
+
         $test_packages .= <<"        END_CODE";
 {
 $separator beginning of $test $separator
@@ -647,8 +678,9 @@ $separator end of $test $separator
     if ( $shutdown ) {
         $code .= "    $shutdown->() if __FILE__ eq '$dump';\n";
     }
-
-    $code .= "}\n$test_packages";
+    
+    $code .= "}\n";
+    $code .= $test_packages;
     if ( my $tidy = $self->_tidy ) {
         eval "use Perl::Tidy";
         my $error = $@;
@@ -1006,7 +1038,7 @@ out which one is actually causing the failure.
 
 =head1 COMMON PITFALLS
 
-=head2 My Tests Through an Exception But Passed Anyway!
+=head2 My Tests Threw an Exception But Passed Anyway!
 
 This really isn't a C<Test::Aggregate> problem so much as a general Perl
 problem.  For each test file, C<Test::Aggregate> wraps the tests in an eval

@@ -1,5 +1,16 @@
 Revision history for Test-Aggregate
 
+0.35_02 14/05/2009
+        - Deprecate tests run in BEGIN/END/CHECK/INIT.
+          See http://use.perl.org/~Ovid/journal/38974 for more information.
+        - check_plan, if set, is now done at the end of each test instead of
+          the end of all tests.
+        - Make it work with the Test::Builder 0.88 and previous versions.
+        - Embed the calling test script name in a comment at the top of the
+          dump file.
+        - Fix a doc typo (thanks to Offer Kaye for the report)
+        - Cleaned up some tests.
+
 0.35_01 18/11/2008
         - Make 'exit()' scream loudly if called.
         - Move Test::Aggregate::Builder globals into a hashref in the object.

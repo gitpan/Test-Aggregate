@@ -3,12 +3,12 @@
 use strict;
 use warnings;
 
+use lib '../schwern-test-more/lib/';
 use lib 'lib', 't/lib';
 use Test::Aggregate;
-use Test::More;
 
-my ( $startup, $shutdown ) = ( 3, 0 );
-my ( $setup,   $teardown ) = ( 3, 0 );
+my ( $startup, $shutdown ) = ( 0, 0 );
+my ( $setup,   $teardown ) = ( 0, 0 );
 
 $SIG{__WARN__} = sub {
     my $warning = shift;
@@ -32,8 +32,9 @@ my $tests = Test::Aggregate->new(
     }
 );
 $tests->run;
-is $startup,  4, 'Startup should be called once';
+is $startup,  1, 'Startup should be called once';
 is $shutdown, 1, '... as should shutdown';
-is $setup,    9, 'Setup should be called once for each test program';
+is $setup,    6, 'Setup should be called once for each test program';
 is $teardown, 6, '... as should teardown';
-unlink $dump or warn "Cannot unlink ($dump): $!";
+#unlink $dump or warn "Cannot unlink ($dump): $!";
+done_testing;

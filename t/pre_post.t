@@ -3,7 +3,6 @@
 use strict;
 use warnings;
 
-use lib '../schwern-test-more/lib/';
 use lib 'lib', 't/lib';
 use Test::Aggregate;
 
@@ -34,7 +33,7 @@ my $tests = Test::Aggregate->new(
 $tests->run;
 is $startup,  1, 'Startup should be called once';
 is $shutdown, 1, '... as should shutdown';
-is $setup,    6, 'Setup should be called once for each test program';
-is $teardown, 6, '... as should teardown';
-#unlink $dump or warn "Cannot unlink ($dump): $!";
+is $setup,    5, 'Setup should be called once for each test program';
+is $teardown, 5, '... as should teardown';
+unlink $dump or warn "Cannot unlink ($dump): $!";
 done_testing() if __PACKAGE__->can('done_testing');

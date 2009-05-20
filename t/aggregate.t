@@ -3,7 +3,6 @@
 use strict;
 use warnings;
 
-use lib './schwern-test-more/lib/';
 use lib 'lib', 't/lib';
 use Test::Aggregate;
 
@@ -22,4 +21,4 @@ my $tests = Test::Aggregate->new(
 $tests->run;
 
 ok -f $dump, '... and we should have written out a dump file';
-#unlink $dump or warn "Cannot unlink ($dump): $!";
+unlink $dump or warn "Cannot unlink ($dump): $!";

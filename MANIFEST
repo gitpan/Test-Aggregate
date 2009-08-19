@@ -6,7 +6,9 @@ aggtests/subs.t
 Build.PL
 Changes
 lib/Test/Aggregate.pm
+lib/Test/Aggregate/Base.pm
 lib/Test/Aggregate/Builder.pm
+lib/Test/Aggregate/Nested.pm
 Makefile.PL
 MANIFEST
 META.yml			# Will be created by "make dist"
@@ -16,5 +18,7 @@ t/aggregate.t
 t/lib/Slow/Loading/Module.pm
 xt/author/pod-coverage.t
 xt/author/pod.t
+t/nested.t
 t/pre_post.t
+t/pre_post_nested.t
 t/subs.t

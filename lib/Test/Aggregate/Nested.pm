@@ -17,11 +17,11 @@ Test::Aggregate::Nested - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.35_07
+Version 0.36
 
 =cut
 
-$VERSION = '0.35_07';
+$VERSION = '0.36';
 
 =head1 SYNOPSIS
 
@@ -33,6 +33,9 @@ $VERSION = '0.35_07';
     $tests->run;
 
 =head1 DESCRIPTION
+
+B<ALPHA WARNING>:  this is alpha code.  Conceptually it is superior to
+C<Test::Aggregate>, but in reality, it might not be.  We'll see.
 
 This module is almost identical to C<Test::Aggregate> and will in the future
 be the preferred way of aggregating tests (until someone comes up with

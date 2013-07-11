@@ -17,17 +17,19 @@ my %VERBOSE = (
 );
 my $BUILDER = Test::Builder->new;
 
+=encoding utf-8
+
 =head1 NAME
 
 Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.364
+Version 0.365
 
 =cut
 
-our $VERSION = '0.364';
+our $VERSION = '0.365';
 $VERSION = eval $VERSION;
 
 =head1 SYNOPSIS
@@ -45,7 +47,7 @@ $VERSION = eval $VERSION;
 
 B<WARNING>:  this is ALPHA code.  The interface is not guaranteed to be
 stable.  Further, check out L<Test::Aggregate::Nested> (included with this
-distribution).  It's a more robust implemenation which does not have the same
+distribution).  It's a more robust implementation which does not have the same
 limitations as C<Test::Aggregate>.
 
 A common problem with many test suites is that they can take a long time to
@@ -260,6 +262,8 @@ sub _do_dry_run {
 sub run {
     my $self  = shift;
 
+    my $verbose = $self->_verbose;
+
     my @tests = $self->_get_tests;
     if ( $self->_dry ) {
         my $current = 1;
@@ -307,7 +311,7 @@ sub run {
         $current_test++;
         my ( $test, $package ) = @$data;
         $self->_setup->($test) if $self->_setup;
-        run_this_test_program( $package => $test, $current_test, $total_tests, 2 );
+        run_this_test_program( $package => $test, $current_test, $total_tests, $verbose );
         if ( my $error = $@ ) {
             Test::More::ok( 0, "Error running ($test):  $error" );
         }
@@ -361,7 +365,7 @@ sub run_this_test_program {
             $builder->{'Test::Aggregate::Builder'}{file_for}{$package} = $test;
             local $builder->{'Test::Aggregate::Builder'}{running} = $package;
             eval { $package->run_the_tests };
-            if ($@ && $@ == $Test::Aggregate::Builder::skip) {
+            if ($@ && ref($@) && $@ == $Test::Aggregate::Builder::skip) {
                 $builder->skip( $builder->{'Test::Aggregate::Builder'}{skip_all}{$package} );
                 return;
             }
@@ -369,7 +373,7 @@ sub run_this_test_program {
         }
     };
 
-    if ($verbose) {
+    {
         my $test_name = "$test ($current_test out of $num_tests)";
         my $failed    = _any_tests_failed();
         chomp $error if defined $error;
@@ -377,7 +381,11 @@ sub run_this_test_program {
         my $ok = $failed || $error
                 ? "not ok - $test_name $error"
                 : "    ok - $test_name";
+      # don't diag if verbose is zero
+      if( $verbose ){
         Test::More::diag($ok) if $error or $failed or $verbose == $VERBOSE{all};
+      }
+        # but do register as a failure
         if ($error or $failed) {
             Test::More::ok(0, "Error running ($test):  $error");
             # XXX this should be fine since these keys are not actually used
@@ -923,27 +931,9 @@ You can find documentation for this module with the perldoc command.
 
     perldoc Test::Aggregate
 
-You can also look for information at:
+You can also find information oneline:
 
-=over 4
-
-=item * AnnoCPAN: Annotated CPAN documentation
-
-L<http://annocpan.org/dist/Test-Aggregate>
-
-=item * CPAN Ratings
-
-L<http://cpanratings.perl.org/d/Test-Aggregate>
-
-=item * RT: CPAN's request tracker
-
-L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Test-Aggregate>
-
-=item * Search CPAN
-
-L<http://search.cpan.org/dist/Test-Aggregate>
-
-=back
+L<http://metacpan.org/release/Test-Aggregate>
 
 =head1 ACKNOWLEDGEMENTS
 

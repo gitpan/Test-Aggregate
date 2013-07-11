@@ -11,17 +11,19 @@ use FindBin;
 use vars qw(@ISA @EXPORT @EXPORT_OK $VERSION);
 @ISA = 'Test::Aggregate::Base';
 
+=encoding utf-8
+
 =head1 NAME
 
 Test::Aggregate::Nested - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.364
+Version 0.365
 
 =cut
 
-our $VERSION = '0.364';
+our $VERSION = '0.365';
 $VERSION = eval $VERSION;
 
 =head1 SYNOPSIS
@@ -145,7 +147,7 @@ sub run {
         }
         eval <<"        END";
         package $package;
-        Test::Aggregate::Nested::subtest("Tests for $test", sub { do \$test });
+        Test::Aggregate::Nested::_do_file_as_subtest(\$test);
         END
         diag $@ if $@;
         $test_phase{teardown}->($test);
@@ -154,6 +156,38 @@ sub run {
 }
 
 sub run_this_test_program { }
+
+sub _do_file_as_subtest {
+    my ($test) = @_;
+    subtest("Tests for $test", sub {
+        my $error;
+        {
+            local ($@, $!);
+            # if do("file") fails it will return undef (and set $@ or $!)
+            unless(defined( my $return = do $test )){
+                # If there was an error be sure to propogate it.
+                # This isn't quite the same as what's described by `perldoc -f do`
+                # because there are no rules about what a .t file should return.
+                # Besides all we do after this is diag() the error.
+                my $ex_class = 'Test::Builder::Exception';
+                if( my $e = $@ ){
+                    $error = "Couldn't parse $test: $e"
+                        unless (
+                            # a skip in a subtest will be an object
+                            ref($e) ? eval { $e->isa($ex_class) } :
+                                # a skip in a BEGIN ("use Test::More skip_all => $message") gets stringified
+                                $e =~ /^\Q${ex_class}=HASH(0x\E[[:xdigit:]]+\Q)BEGIN failed--compilation aborted\E/
+                        );
+                }
+                elsif( $! ){
+                    $error = "Error during $test: $!";
+                }
+            }
+        }
+        # show the error but don't halt everything
+        Test::More::ok(0, "Error running ($test):  $error") if $error;
+    });
+}
 
 1;
 
@@ -175,29 +209,11 @@ your bug as I make changes.
 
 You can find documentation for this module with the perldoc command.
 
-    perldoc Test::Aggregate
+    perldoc Test::Aggregate::Nested
 
-You can also look for information at:
+You can also find information oneline:
 
-=over 4
-
-=item * AnnoCPAN: Annotated CPAN documentation
-
-L<http://annocpan.org/dist/Test-Aggregate>
-
-=item * CPAN Ratings
-
-L<http://cpanratings.perl.org/d/Test-Aggregate>
-
-=item * RT: CPAN's request tracker
-
-L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Test-Aggregate>
-
-=item * Search CPAN
-
-L<http://search.cpan.org/dist/Test-Aggregate>
-
-=back
+L<http://metacpan.org/release/Test-Aggregate>
 
 =head1 ACKNOWLEDGEMENTS
 

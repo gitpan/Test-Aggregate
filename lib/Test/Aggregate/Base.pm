@@ -11,7 +11,7 @@ use File::Find;
 use vars qw(@ISA @EXPORT @EXPORT_OK);
 @ISA    = qw(Test::Builder::Module);
 
-our $VERSION = '0.364';
+our $VERSION = '0.365';
 $VERSION = eval $VERSION;
 
 BEGIN { 
@@ -208,13 +208,15 @@ sub _get_package {
 
 __END__
 
+=encoding utf-8
+
 =head1 NAME
 
 Test::Aggregate::Base - Base class for aggregated tests.
 
 =head1 VERSION
 
-Version 0.364
+Version 0.365
 
 =head1 SYNOPSIS
 
@@ -243,29 +245,11 @@ your bug as I make changes.
 
 You can find documentation for this module with the perldoc command.
 
-    perldoc Test::Aggregate
+    perldoc Test::Aggregate::Base
 
-You can also look for information at:
+You can also find information oneline:
 
-=over 4
-
-=item * AnnoCPAN: Annotated CPAN documentation
-
-L<http://annocpan.org/dist/Test-Aggregate>
-
-=item * CPAN Ratings
-
-L<http://cpanratings.perl.org/d/Test-Aggregate>
-
-=item * RT: CPAN's request tracker
-
-L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Test-Aggregate>
-
-=item * Search CPAN
-
-L<http://search.cpan.org/dist/Test-Aggregate>
-
-=back
+L<http://metacpan.org/release/Test-Aggregate>
 
 =head1 ACKNOWLEDGEMENTS
 

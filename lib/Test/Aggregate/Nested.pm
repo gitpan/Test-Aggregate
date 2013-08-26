@@ -19,11 +19,11 @@ Test::Aggregate::Nested - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.368
+Version 0.369
 
 =cut
 
-our $VERSION = '0.368';
+our $VERSION = '0.369';
 $VERSION = eval $VERSION;
 
 =head1 SYNOPSIS
@@ -113,6 +113,8 @@ Please upgrade to version 0.8901 or newer to use Test::Aggregate::Nested.
 
 sub run {
     my $self = shift;
+
+    local $Test::Aggregate::Base::_pid = $$;
 
     my %test_phase;
     foreach my $attr ( $self->_code_attributes ) {

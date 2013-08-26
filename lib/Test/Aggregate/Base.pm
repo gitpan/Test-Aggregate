@@ -11,13 +11,20 @@ use File::Find;
 use vars qw(@ISA @EXPORT @EXPORT_OK);
 @ISA    = qw(Test::Builder::Module);
 
-our $VERSION = '0.368';
+our $VERSION = '0.369';
 $VERSION = eval $VERSION;
+
+our $_pid = $$;
 
 BEGIN { 
     $ENV{TEST_AGGREGATE} = 1;
     *CORE::GLOBAL::exit = sub {
         my ($package, $filename, $line) = caller;
+
+      # Warn about exit being called unless there's been a fork()
+      # (in which case some form of exit is expected).
+      if( $_pid == $$ ){
+
         print STDERR <<"        END_EXIT_WARNING";
 ********
 WARNING!
@@ -28,6 +35,9 @@ Line:    $line
 WARNING!
 ********
         END_EXIT_WARNING
+
+      }
+
         exit(@_);
     };
 };
@@ -216,7 +226,7 @@ Test::Aggregate::Base - Base class for aggregated tests.
 
 =head1 VERSION
 
-Version 0.368
+Version 0.369
 
 =head1 SYNOPSIS
 

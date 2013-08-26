@@ -5,12 +5,15 @@ use warnings;
 package # no_index
   AggTestTester;
 
+use Test::Aggregate;
+use File::Spec::Functions qw(catfile); # core
 use Test::More;
 use Exporter;
 our @ISA = qw(Exporter);
 
 our @EXPORT = qw(
   aggregate
+  catfile
   only_with_nested
 );
 
@@ -21,6 +24,7 @@ sub only_with_nested (&) {
     skip 'Need Test::More::subtest() for nested tests', 1
         if !Test::More->can('subtest');
 
+    require Test::Aggregate::Nested;
     $sub->();
   }
 }

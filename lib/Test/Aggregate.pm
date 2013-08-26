@@ -25,11 +25,11 @@ Test::Aggregate - Aggregate C<*.t> tests to make them run faster.
 
 =head1 VERSION
 
-Version 0.368
+Version 0.369
 
 =cut
 
-our $VERSION = '0.368';
+our $VERSION = '0.369';
 $VERSION = eval $VERSION;
 
 =head1 SYNOPSIS
@@ -261,6 +261,8 @@ sub _do_dry_run {
 
 sub run {
     my $self  = shift;
+
+    local $Test::Aggregate::Base::_pid = $$;
 
     my $verbose = $self->_verbose;
 

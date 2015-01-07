@@ -11,7 +11,7 @@ use File::Find;
 use vars qw(@ISA @EXPORT @EXPORT_OK);
 @ISA    = qw(Test::Builder::Module);
 
-our $VERSION = '0.371';
+our $VERSION = '0.372';
 $VERSION = eval $VERSION;
 
 our $_pid = $$;
@@ -114,6 +114,7 @@ sub new {
         dry
         dump
         findbin
+        no_generate_plan
         set_filenames
         shuffle
         test_nowarnings
@@ -226,7 +227,7 @@ Test::Aggregate::Base - Base class for aggregated tests.
 
 =head1 VERSION
 
-Version 0.371
+Version 0.372
 
 =head1 SYNOPSIS
 
